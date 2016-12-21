@@ -25,9 +25,11 @@ using namespace LegionRuntime::HighLevel;
 using namespace LegionRuntime::Accessor;
 using namespace LegionRuntime::Arrays;
 
+
 namespace flecsi {
 namespace execution {
 
+  
 static const size_t N = 8;
 
 using index_partition_t = dmp::index_partition__<size_t>;
@@ -146,8 +148,10 @@ driver(
   {
     FieldAllocator allocator = runtime->create_field_allocator(context,
                                              cells_fs);
-    allocator.allocate_field(sizeof(size_t), FID_CELL);
-    allocator.allocate_field(sizeof(size_t), FID_DATA);
+    allocator.allocate_field(sizeof(int), FID_CELL);
+    runtime->attach_name(cells_fs, FID_CELL, "CELL");
+    allocator.allocate_field(sizeof(int), FID_DATA);
+    runtime->attach_name(cells_fs, FID_DATA, "DATA");
   }
 
   int num_ranks;
@@ -227,7 +231,7 @@ driver(
   {
     FieldAllocator allocator = runtime->create_field_allocator(context,
                                              vertices_fs);
-    allocator.allocate_field(sizeof(size_t), FID_VERT);
+    allocator.allocate_field(sizeof(int), FID_VERT);
   } 
 
   IndexSpace vertices_is = runtime->create_index_space(context,
@@ -323,7 +327,7 @@ driver(
 
   initialization_launcher.add_region_requirement(
     RegionRequirement(vert_primary_lp, 0/*projection ID*/,
-                      WRITE_DISCARD, EXCLUSIVE, vertices_lr));
+                      READ_ONLY, EXCLUSIVE, vertices_lr));
   initialization_launcher.add_field(1, FID_VERT);
 
   FutureMap fm2 = runtime->execute_index_space( context,

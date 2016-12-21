@@ -17,8 +17,11 @@
 // \date Initial file creation: Aug 25, 2016
 ///
 
-int main(int argc, char ** argv) {
+int gtest_mpilegion_argc;
+char** gtest_mpilegion_argv;
 
+int main(int argc, char ** argv) {
+  
 #if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion || \
   FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpi
   MPI_Init(&argc, &argv);

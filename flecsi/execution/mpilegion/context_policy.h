@@ -36,6 +36,9 @@
 #include "flecsi/execution/mpilegion/mpi_legion_interop.h"
 #include "flecsi/execution/mpilegion/init_partitions_task.h"
 
+extern int gtest_mpilegion_argc;
+extern char** gtest_mpilegion_argv;
+
 namespace flecsi {
 namespace execution {
 
@@ -186,7 +189,7 @@ struct mpilegion_context_policy_t
     interop_helper_.legion_configure();
 
     // Start the runtime
-    lr_runtime_t::start(argc, argv,true);
+    lr_runtime_t::start(gtest_mpilegion_argc, gtest_mpilegion_argv,true);
 
     interop_helper_.handoff_to_legion();
 

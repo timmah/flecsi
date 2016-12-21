@@ -104,6 +104,7 @@ initialization_task(
   std::cout << "Here I am in init_cells" << std::endl;
 
   using index_partition_t = index_partition__<size_t>;
+  using field_id = LegionRuntime::HighLevel::FieldID;
 
   flecsi::execution::context_t & context_ =
     flecsi::execution::context_t::instance();
@@ -118,8 +119,9 @@ initialization_task(
   LegionRuntime::HighLevel::IndexSpace is_cells = lr_cells.get_index_space();
 
   LegionRuntime::HighLevel::IndexIterator itr_cells(runtime, ctx, is_cells);
-
-  auto acc_cells = regions[0].get_field_accessor(0).typeify<size_t>();
+#if 0
+  field_id fid_cell = *(task->regions[0].privilege_fields.begin());
+  auto acc_cells = regions[0].get_field_accessor(fid_cell).typeify<size_t>();
 
   for (auto primary_cell : ip_cells.primary) {
     assert(itr_cells.has_next());
@@ -128,6 +130,7 @@ initialization_task(
     acc_cells.write(ptr, id);
   }
 
+#endif 
   //vertices
   LegionRuntime::HighLevel::LogicalRegion lr_vert =
       regions[1].get_logical_region();
@@ -135,7 +138,8 @@ initialization_task(
 
   LegionRuntime::HighLevel::IndexIterator itr_vert(runtime, ctx, is_vert);
 
-  auto acc_vert = regions[1].get_field_accessor(0).typeify<size_t>();
+  field_id fid_vert = *(task->regions[1].privilege_fields.begin());
+  LegionRuntime::Accessor::RegionAccessor<LegionRuntime::Accessor::AccessorType::Generic, int>  acc_vert = regions[1].get_field_accessor(fid_vert).typeify<int>();
 
   for (auto primary_vert : ip_vert.primary) {
     assert(itr_vert.has_next());
@@ -421,17 +425,17 @@ ghost_part_task(
   LegionRuntime::HighLevel::LogicalRegion cells_lr =
       regions[0].get_logical_region();
   LegionRuntime::HighLevel::IndexSpace cells_is = cells_lr.get_index_space();
-  LegionRuntime::Accessor::RegionAccessor<generic_type, size_t>
+  LegionRuntime::Accessor::RegionAccessor<generic_type, int>
     acc_cells_global= regions[0].get_field_accessor(
-      fid_cells_global).typeify<size_t>();
+      fid_cells_global).typeify<int>();
 
   field_id fid_vert_global = *(task->regions[1].privilege_fields.begin());
   LegionRuntime::HighLevel::LogicalRegion vert_lr =
       regions[1].get_logical_region();
   LegionRuntime::HighLevel::IndexSpace vert_is = vert_lr.get_index_space();
-  LegionRuntime::Accessor::RegionAccessor<generic_type, size_t>
+  LegionRuntime::Accessor::RegionAccessor<generic_type, int>
     acc_vert_global= regions[1].get_field_accessor(
-      fid_vert_global).typeify<size_t>();
+      fid_vert_global).typeify<int>();
  
   Rect<1> ghost_cells_rect(Point<1>(0), Point<1>(ip_cells.ghost.size()-1));
   LegionRuntime::HighLevel::IndexSpace ghost_cells_is =
@@ -789,6 +793,7 @@ ghost_access_task(
   Legion::Context ctx, Legion::HighLevelRuntime *runtime
 )
 {
+  std::cout << "ghost_access_task running" << std::endl; 
   using generic_type = LegionRuntime::Accessor::AccessorType::Generic;
   using field_id = LegionRuntime::HighLevel::FieldID;
 
