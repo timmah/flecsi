@@ -76,7 +76,7 @@ MPIMapper : public Legion::Mapping::DefaultMapper
   , machine(machine)
 
   {
-  	using legion_machine=LegionRuntime::HighLevel::Machine;
+/*  	using legion_machine=LegionRuntime::HighLevel::Machine;
    	using legion_proc=LegionRuntime::HighLevel::Processor;
    
    	legion_machine::ProcessorQuery pq = 
@@ -112,7 +112,8 @@ MPIMapper : public Legion::Mapping::DefaultMapper
    	std::cout << "Mapper constuctor: local=" << local << " cpus=" <<
          local_cpus.size() << " gpus=" << local_gpus.size() <<
           " sysmem=" << local_sysmem<<std::endl;
-  }// end MPIMapper
+*/ 
+ }// end MPIMapper
 
   virtual ~MPIMapper(){};
 
@@ -246,11 +247,81 @@ MPIMapper : public Legion::Mapping::DefaultMapper
   	} //end else if task.task_id=
 */
    	else{
-			DefaultMapper::default_slice_task(task, local_cpus, remote_cpus,
+      std::vector<Legion::VariantID> variants;
+      runtime->find_valid_variants(ctx, task.task_id, variants);
+      /* find if we have a procset variant for task */
+      for(unsigned i = 0; i < variants.size(); i++)
+      {
+        const Legion::ExecutionConstraintSet exset =
+           runtime->find_execution_constraints(ctx, task.task_id, variants[i]);
+        if(exset.processor_constraint.kind == legion_proc::PROC_SET) {
+        
+           // Before we do anything else, see if it is in the cache
+           std::map<Legion::Domain,std::vector<TaskSlice> >::const_iterator
+              finder =
+             procset_slices_cache.find(input.domain);
+           if (finder != procset_slices_cache.end()) {
+                   output.slices = finder->second;
+                   return;
+           }       
+           
+          output.slices.resize(input.domain.get_volume());
+          unsigned idx = 0;
+          LegionRuntime::Arrays::Rect<1> rect = input.domain.get_rect<1>();
+          for (LegionRuntime::Arrays::GenericPointInRectIterator<1> pir(rect);
+              pir; pir++, idx++)
+          {   
+            Rect<1> slice(pir.p, pir.p);
+            output.slices[idx] = TaskSlice(Legion::Domain::from_rect<1>(slice),
+              remote_procsets[idx % remote_cpus.size()],
+              false/*recurse*/, false/*stealable*/);
+          }   
+          
+          // Save the result in the cache
+          procset_slices_cache[input.domain] = output.slices;
+          return;
+        } 
+      } 
+      
+
+      // Whatever kind of processor we are is the one this task should
+      // be scheduled on as determined by select initial task
+      legion_proc::Kind target_kind =
+        task.must_epoch_task ? local_proc.kind() : task.target_proc.kind();
+      switch (target_kind)
+      {
+        case legion_proc::LOC_PROC:
+          {
+            default_slice_task(task, local_cpus, remote_cpus,
                                input, output, cpu_slices_cache);
-   	}//end else
+            break;             
+          } 
+        case legion_proc::TOC_PROC:
+          {
+            default_slice_task(task, local_gpus, remote_gpus,
+                               input, output, gpu_slices_cache);
+            break;             
+          } 
+        case legion_proc::IO_PROC:
+          {
+            default_slice_task(task, local_ios, remote_ios,
+                               input, output, io_slices_cache);
+            break;             
+          } 
+        case legion_proc::PROC_SET:
+          {
+            default_slice_task(task, local_procsets, remote_procsets,
+                               input, output, procset_slices_cache);
+            break;             
+          } 
+        default:
+          assert(false); // unimplemented processor kind
+      }   
+    }//end else 
+
   } //end slice_task
-                         
+  
+               
   protected:
 
   std::map<Point<1>, std::vector<LegionRuntime::HighLevel::Processor>, 

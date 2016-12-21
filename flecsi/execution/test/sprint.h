@@ -731,7 +731,6 @@ driver(
   LegionRuntime::HighLevel::TaskArgument(0, 0),
   arg_map);
 
-  ghost_access_launcher.tag = MAPPER_FORCE_RANK_MATCH;
 
   ghost_access_launcher.add_region_requirement(
   RegionRequirement(cells_shared_lp, 0/*projection ID*/,
