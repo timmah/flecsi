@@ -725,7 +725,8 @@ struct storage_type_t<sparse, DS, MD> {
   ///
   template<
     typename T,
-    size_t NS
+    size_t NS,
+    size_t PS
   >
   static
   handle_t<T>

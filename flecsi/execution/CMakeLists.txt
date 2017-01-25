@@ -191,10 +191,15 @@ if(NOT DEFINED ENV{TRAVIS})
     if(ENABLE_PARTITIONING AND ENABLE_PARMETIS)
       cinch_add_unit(mpilegion_data_handle
         SOURCES
+          test/task.cc
           test/data-handle.h
           mpilegion/runtime_driver.cc
+          mpilegion/init_partitions_task.cc
+          ../data/data_client.cc
+          legion/dpd.cc
         DEFINES DATA_HANDLE_TEST
           FLECSI_DRIVER=flecsi/execution/test/data-handle.h
+          TEST_INIT=flecsi/execution/test/task_init.h
         LIBRARIES ${PARTITION_LIBRARIES}
         POLICY MPILEGION
         THREADS 2

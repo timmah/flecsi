@@ -88,7 +88,8 @@ namespace legion {
     ///
     template<
       typename T,
-      size_t NS
+      size_t NS,
+      size_t PS
     >
     static
     tuple_handle_t

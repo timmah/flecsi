@@ -246,7 +246,7 @@ private:
 // Dense handle.
 //----------------------------------------------------------------------------//
 
-template<typename T>
+template<typename T, size_t PS>
 struct dense_handle_t : public data_handle_t
 {
   using type = T;
@@ -364,7 +364,8 @@ struct storage_type_t<dense, DS, MD>
   ///
   template<
     typename T,
-    size_t NS
+    size_t NS,
+    size_t PS
   >
   static
   handle_t<T>
