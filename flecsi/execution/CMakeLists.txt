@@ -188,6 +188,19 @@ if(NOT DEFINED ENV{TRAVIS})
       )
     endif()
 
+    if(ENABLE_PARTITIONING AND ENABLE_PARMETIS)
+      cinch_add_unit(mpilegion_data_handle
+        SOURCES
+          test/data-handle.h
+          mpilegion/runtime_driver.cc
+        DEFINES DATA_HANDLE_TEST
+          FLECSI_DRIVER=flecsi/execution/test/data-handle.h
+        LIBRARIES ${PARTITION_LIBRARIES}
+        POLICY MPILEGION
+        THREADS 2
+      )
+    endif()
+
   endif()
 
 endif()
