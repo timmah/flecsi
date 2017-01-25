@@ -168,6 +168,7 @@ driver(
   legion_dpd::partitioned_unstructured vertices_part;
 
   size_t total_num_cells=0;
+  size_t total_num_ghost_cells=0;
   std::vector<size_t> cells_primary_start_id;
   std::vector<size_t> cells_num_shared;
   std::vector<size_t> cells_num_ghosts;
@@ -175,6 +176,7 @@ driver(
   std::vector<size_t> num_vertex_conns;
 
   size_t total_num_vertices=0;
+  size_t total_num_ghost_vertices=0;
   std::vector<size_t> vert_primary_start_id;
   std::vector<size_t> vert_num_shared;
   std::vector<size_t> vert_num_ghosts;
@@ -189,6 +191,7 @@ driver(
 
     cells_primary_start_id.push_back(total_num_cells);
     total_num_cells += received.primary_cells;
+    total_num_ghost_cells += received.ghost_cells;
     cells_num_shared.push_back(received.shared_cells);
     cells_num_ghosts.push_back(received.ghost_cells);
     cells_num_exclusive.push_back(received.exclusive_cells);
@@ -197,6 +200,7 @@ driver(
 
     vert_primary_start_id.push_back(total_num_vertices);
     total_num_vertices += received.primary_vertices;
+    total_num_ghost_vertices += received.ghost_vertices;
     vert_num_shared.push_back(received.shared_vertices);
     vert_num_ghosts.push_back(received.ghost_vertices);
     vert_num_exclusive.push_back(received.exclusive_vertices);
@@ -351,7 +355,6 @@ driver(
   
   fm2.wait_all_results();
 
-#if 0
 #if 0 
   //printing cell_lr results
   {
@@ -458,6 +461,122 @@ driver(
   runtime->destroy_index_partition(context, raw_connectivity_part.ip);
   runtime->destroy_logical_region(context, raw_connectivity_part.lr);
 
+  //Data compaction: creating an index space with the size of global IS + ghost
+  //partition of the global IS. we need it to create partitioning that will
+  //be a combination of primary+ghost part
+
+  //Cells:
+  
+  size_t expanded_cells=total_num_cells+total_num_ghost_cells;
+  IndexSpace expanded_cells_is =
+		runtime->create_index_space(context,expanded_cells);
+  {
+    IndexAllocator allocator = runtime->create_index_allocator(context,
+          expanded_cells_is);
+    allocator.alloc(expanded_cells);
+  }
+
+  LogicalRegion expanded_cells_lr=
+    runtime->create_logical_region(context,expanded_cells_is, cells_fs);
+  runtime->attach_name(expanded_cells_lr, "expanded cells logical region");
+
+  //Vertices
+
+  size_t expanded_vertices= total_num_vertices+total_num_ghost_vertices;
+  IndexSpace expanded_vertices_is = runtime->create_index_space(context,
+          expanded_vertices);
+  {
+    IndexAllocator allocator = runtime->create_index_allocator(context,
+            expanded_vertices_is);
+    allocator.alloc(expanded_vertices);
+  }
+
+  LogicalRegion expanded_vertices_lr=
+    runtime->create_logical_region(context,expanded_vertices_is, vertices_fs);
+  runtime->attach_name(expanded_vertices_lr, "expanded_vertices LR");
+
+
+  //partition expanded_cells by number of mpi ranks
+
+  Coloring expanded_cells_coloring;
+  {
+    IndexIterator itr(runtime, context, expanded_cells_is);
+
+    size_t start_id =0;
+    size_t end_id=0;
+    for(size_t i = 0; i < num_ranks; ++i){
+      end_id=start_id+cells_num_shared[i] + cells_num_exclusive[i] + 
+					cells_num_ghosts[i];
+      for (size_t j=start_id; j<end_id; j++){
+        assert(itr.has_next());
+        ptr_t ptr = itr.next();
+        expanded_cells_coloring[i].points.insert(ptr);
+      }//end for
+      start_id=end_id;
+    }//end for
+   }//end scope
+ 
+  IndexPartition expanded_cells_ip =
+    runtime->create_index_partition(context, expanded_cells_is,
+    expanded_cells_coloring, true);
+
+  LogicalPartition expanded_cells_lp = runtime->get_logical_partition(context,
+           expanded_cells_lr, expanded_cells_ip);
+
+  //partition expanded_vertices by number of mpi ranks
+
+  Coloring expanded_vertices_coloring;
+  {
+    IndexIterator itr(runtime, context, expanded_vertices_is);
+
+    size_t start_id =0;
+    size_t end_id=0;
+    for(size_t i = 0; i < num_ranks; ++i){
+      end_id=start_id+vert_num_shared[i] + vert_num_exclusive[i] +
+          vert_num_ghosts[i];
+      for (size_t j=start_id; j<end_id; j++){
+        assert(itr.has_next());
+        ptr_t ptr = itr.next();
+        expanded_vertices_coloring[i].points.insert(ptr);
+      }//end for
+      start_id=end_id;
+    }//end for
+   }//end scope
+
+  IndexPartition expanded_vertices_ip =
+    runtime->create_index_partition(context, expanded_vertices_is,
+    expanded_vertices_coloring, true);
+
+  LogicalPartition expanded_vertices_lp = runtime->get_logical_partition(
+			context, expanded_vertices_lr, expanded_vertices_ip);
+ 
+ 
+  //call an index task that fills expanded_cells and expended vertices with ids
+
+  LegionRuntime::HighLevel::IndexLauncher fill_expanded_lr_launcher(
+    task_ids_t::instance().fill_expanded_lr_task_id,
+    rank_domain,
+    LegionRuntime::HighLevel::TaskArgument(0, 0),
+    arg_map);
+
+  fill_expanded_lr_launcher.tag = MAPPER_FORCE_RANK_MATCH;
+
+  fill_expanded_lr_launcher.add_region_requirement(
+    RegionRequirement(expanded_cells_lp, 0/*projection ID*/,
+      WRITE_DISCARD, EXCLUSIVE, expanded_cells_lr));
+  fill_expanded_lr_launcher.add_field(0, fid_t.fid_cell);
+
+  fill_expanded_lr_launcher.add_region_requirement(
+    RegionRequirement(expanded_vertices_lp, 0/*projection ID*/,
+      WRITE_DISCARD, EXCLUSIVE, expanded_vertices_lr));
+  fill_expanded_lr_launcher.add_field(1, fid_t.fid_vert);
+
+  FutureMap fm3 = runtime->execute_index_space( context,
+      fill_expanded_lr_launcher);
+
+  fm3.wait_all_results();  
+
+#if 0
   //creating partiotioning for shared and exclusive elements:
   Coloring cells_shared_coloring;
   Coloring vert_shared_coloring;
@@ -790,11 +909,11 @@ driver(
 
   FutureMap fm6 = runtime->execute_index_space(context,check_part_launcher);
   fm6.wait_all_results();
-
+#endif
 
 
   //call a legion task that tests ghost cell access
-
+#if 0
   std::vector<PhaseBarrier> phase_barriers;
   std::vector<std::set<int>> master_colors(num_ranks);
   for (int master_color=0; master_color < num_ranks; ++master_color) {
@@ -857,7 +976,6 @@ driver(
   for (unsigned idx = 0; idx < phase_barriers.size(); idx++)
     runtime->destroy_phase_barrier(context, phase_barriers[idx]);
   phase_barriers.clear();
-
 #endif
   //TOFIX: free all lr physical regions is
   runtime->destroy_logical_region(context, vertices_lr);

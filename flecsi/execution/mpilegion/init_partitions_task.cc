@@ -166,7 +166,87 @@ initialization_task(
 }//initialization_task
 
 
-partition_lr
+void
+fill_expanded_lr_task(
+  const Legion::Task *task,
+  const std::vector<Legion::PhysicalRegion> & regions,
+  Legion::Context ctx, Legion::HighLevelRuntime *runtime
+)
+{
+  assert(regions.size() == 2);
+  assert(task->regions.size() == 2);
+  assert(task->regions[0].privilege_fields.size() == 1);
+  assert(task->regions[1].privilege_fields.size() == 1);
+  std::cout << "Here I am in fill_expanded_lr_task" << std::endl;
+  
+  using index_partition_t = flecsi::dmp::index_partition__<size_t>;
+  using field_id = LegionRuntime::HighLevel::FieldID;
+  
+  flecsi::execution::context_t & context_ =
+    flecsi::execution::context_t::instance();
+  index_partition_t ip_cells =
+    context_.interop_helper_.data_storage_[0];
+  index_partition_t ip_vert =
+    context_.interop_helper_.data_storage_[1];
+  
+  //cells:
+  LegionRuntime::HighLevel::LogicalRegion lr_cells =
+      regions[0].get_logical_region(); 
+  LegionRuntime::HighLevel::IndexSpace is_cells = lr_cells.get_index_space();
+  
+  LegionRuntime::HighLevel::IndexIterator itr_cells(runtime, ctx, is_cells);
+
+//  auto acc_cells = regions[0].get_field_accessor(0).typeify<size_t>();
+  
+  field_id fid_cell = *(task->regions[0].privilege_fields.begin());
+  LegionRuntime::Accessor::RegionAccessor<
+    LegionRuntime::Accessor::AccessorType::Generic, size_t>  acc_cells =
+    regions[0].get_field_accessor(fid_cell).typeify<size_t>();
+
+  
+  for (auto primary_cell : ip_cells.primary) {
+    assert(itr_cells.has_next());
+    size_t id =primary_cell;
+    ptr_t ptr = itr_cells.next();
+    acc_cells.write(ptr, id);
+  }
+  for (auto ghost_cell : ip_cells.ghost) {
+    assert(itr_cells.has_next());
+    size_t id =ghost_cell.id;
+    ptr_t ptr = itr_cells.next();
+    acc_cells.write(ptr, id);
+  }
+  
+  //vertices
+  LegionRuntime::HighLevel::LogicalRegion lr_vert =
+      regions[1].get_logical_region(); 
+  LegionRuntime::HighLevel::IndexSpace is_vert = lr_vert.get_index_space();
+
+  LegionRuntime::HighLevel::IndexIterator itr_vert(runtime, ctx, is_vert);
+
+  //auto acc_vert = regions[1].get_field_accessor(0).typeify<size_t>();
+
+  field_id fid_vert = *(task->regions[1].privilege_fields.begin());
+  LegionRuntime::Accessor::RegionAccessor
+    <LegionRuntime::Accessor::AccessorType::Generic, size_t>  acc_vert =
+    regions[1].get_field_accessor(fid_vert).typeify<size_t>();
+
+  for (auto primary_vert : ip_vert.primary) {
+    assert(itr_vert.has_next());
+    size_t id =primary_vert;
+    ptr_t ptr = itr_vert.next();
+    acc_vert.write(ptr, id);
+  }
+  for (auto ghost_vert : ip_vert.ghost) {
+    assert(itr_vert.has_next());
+    size_t id =ghost_vert.id;
+    ptr_t ptr = itr_vert.next();
+    acc_vert.write(ptr, id);
+  }
+
+}//fill_expanded_lr_task
+
+/*partition_lr
 shared_part_task(
   const Legion::Task *task,
   const std::vector<Legion::PhysicalRegion> & regions,
@@ -561,6 +641,7 @@ ghost_part_task(
   return ghost_lr;
 }//ghost_part_task
 
+
 void
 check_partitioning_task(
   const Legion::Task *task,
@@ -724,6 +805,9 @@ check_partitioning_task(
   std::cout << "test for shared/ghost/exclusive partitions ... passed" 
   << std::endl;
 }//check_partitioning_task
+*/
+
+
 
 void
 init_raw_conn_task(

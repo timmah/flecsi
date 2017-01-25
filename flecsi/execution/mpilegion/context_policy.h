@@ -126,6 +126,12 @@ struct mpilegion_context_policy_t
     lr_runtime_t::register_legion_task<sprint::initialization_task>(
       task_ids_t::instance().init_task_id,lr_loc, false, true);
 
+    // FIXME
+    // This is Galen's hack to get partitioning working for the sprint
+    lr_runtime_t::register_legion_task<sprint::fill_expanded_lr_task>(
+      task_ids_t::instance().fill_expanded_lr_task_id,lr_loc, false, true); 
+
+/*
    // FIXME
     // This is Galen's hack to get partitioning working for the sprint
     lr_runtime_t::register_legion_task<sprint::partition_lr,
@@ -148,10 +154,15 @@ struct mpilegion_context_policy_t
     // This is Galen's hack to get partitioning working for the sprint
     lr_runtime_t::register_legion_task<sprint::check_partitioning_task>(
       task_ids_t::instance().check_partitioning_task_id,lr_loc, false, true);
+*/
 
+    // FIXME
+    // This is Galen's hack to get partitioning working for the sprint 
     lr_runtime_t::register_legion_task<sprint::init_raw_conn_task>(
       task_ids_t::instance().init_raw_conn_task_id,lr_loc, false, true); 
 
+    // FIXME
+    // This is Galen's hack to get partitioning working for the sprint
     lr_runtime_t::register_legion_task<
       flecsi::execution::legion_dpd::init_connectivity_task>(
       task_ids_t::instance().dpd_init_connectivity_task_id,lr_loc, false, true); 

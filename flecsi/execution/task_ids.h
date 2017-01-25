@@ -61,10 +61,11 @@ class task_ids_t
   size_t unset_call_mpi_id = unique_task_id_t::instance().next();
   size_t get_numbers_of_cells_task_id = unique_task_id_t::instance().next();
   size_t init_task_id = unique_task_id_t::instance().next();
-  size_t shared_part_task_id = unique_task_id_t::instance().next();
-  size_t exclusive_part_task_id = unique_task_id_t::instance().next();
-  size_t ghost_part_task_id = unique_task_id_t::instance().next();
-  size_t check_partitioning_task_id = unique_task_id_t::instance().next();
+//  size_t shared_part_task_id = unique_task_id_t::instance().next();
+//  size_t exclusive_part_task_id = unique_task_id_t::instance().next();
+//  size_t ghost_part_task_id = unique_task_id_t::instance().next();
+//  size_t check_partitioning_task_id = unique_task_id_t::instance().next();
+  size_t fill_expanded_lr_task_id = unique_task_id_t::instance().next(); 
   size_t ghost_access_task_id = unique_task_id_t::instance().next();
   size_t init_raw_conn_task_id = unique_task_id_t::instance().next();
   size_t dpd_init_connectivity_task_id = unique_task_id_t::instance().next();

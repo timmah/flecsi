@@ -74,7 +74,14 @@ initialization_task(
   Legion::Context ctx, Legion::HighLevelRuntime *runtime
 );
 
-partition_lr
+void
+fill_expanded_lr_task(
+  const Legion::Task *task,
+  const std::vector<Legion::PhysicalRegion> & regions,
+  Legion::Context ctx, Legion::HighLevelRuntime *runtime
+);
+
+/*partition_lr
 shared_part_task(
   const Legion::Task *task,
   const std::vector<Legion::PhysicalRegion> & regions,
@@ -101,7 +108,7 @@ check_partitioning_task(
   const std::vector<Legion::PhysicalRegion> & regions,
   Legion::Context ctx, Legion::HighLevelRuntime *runtime
 );
-
+*/
 void
 ghost_access_task(
   const Legion::Task *task,
