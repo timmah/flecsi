@@ -23,7 +23,6 @@ set(execution_HEADERS
 	function.h
 	kernel.h
 	task.h
-  PARENT_SCOPE
 )
 
 #------------------------------------------------------------------------------#
@@ -38,7 +37,6 @@ if(FLECSI_RUNTIME_MODEL STREQUAL "serial")
     serial/context_policy.h
     serial/execution_policy.h
     serial/runtime_driver.h
-    PARENT_SCOPE
   )
 
   set(UNIT_POLICY SERIAL)
@@ -61,7 +59,6 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "legion")
 
   set(execution_SOURCES
     legion/dpd.cc
-    PARENT_SCOPE
   )
 
   set(UNIT_POLICY LEGION)
@@ -82,13 +79,11 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
     mpilegion/runtime_driver.h
     task_ids.h
     mpilegion/init_partitions_task.h 
-    PARENT_SCOPE
   )
 
   set(execution_SOURCES
     legion/dpd.cc
     mpilegion/init_partitions_task.cc
-    PARENT_SCOPE
   )
 
   set(UNIT_POLICY MPILEGION)
@@ -96,10 +91,21 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
 
 endif()
 
+set(execution_HEADERS
+  ${execution_HEADERS}
+  PARENT_SCOPE
+)
+
+set(execution_SOURCES
+  ${execution_SOURCES}
+  PARENT_SCOPE
+)
+
 #------------------------------------------------------------------------------#
 # Unit tests.
 #------------------------------------------------------------------------------#
-
+if((NOT DEFINED ENV{TRAVIS} ) OR (FLECSI_RUNTIME_MODEL STREQUAL "serial")
+    OR (FLECSI_RUNTIME_MODEL STREQUAL "legion") )
 cinch_add_unit(task
   SOURCES
     test/task.cc
@@ -128,9 +134,9 @@ cinch_add_unit(simple_function
     flecsi
     ${CINCH_RUNTIME_LIBRARIES}
 )
+endif()
 
 if(NOT DEFINED ENV{TRAVIS})
-
   if(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
 
     cinch_add_unit(mpilegion_task
