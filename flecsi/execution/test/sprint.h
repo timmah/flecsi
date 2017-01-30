@@ -462,7 +462,6 @@ driver(
   //cells_to_vertices.dump(2, 0);
   runtime->destroy_index_partition(context, raw_connectivity_part.ip);
   runtime->destroy_logical_region(context, raw_connectivity_part.lr);
-#endif
 
   //Data compaction: creating an index space with the size of global IS + ghost
   //partition of the global IS. we need it to create partitioning that will
