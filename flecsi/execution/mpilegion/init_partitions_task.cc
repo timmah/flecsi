@@ -203,7 +203,13 @@ fill_expanded_lr_task(
     LegionRuntime::Accessor::AccessorType::Generic, size_t>  acc_cells =
     regions[0].get_field_accessor(fid_cell).typeify<size_t>();
 
-  
+  //create an a vector of pointer pairs where first element of the pair - 
+  //is a pointer to ghost element in local partition pf BLIS,
+  //second one - a pointer to where this element is in the primary part 
+  //of BLIS
+
+  std::vector< std::pair< ptr_t, ptr_t > > ghost_ptrs;
+   
   for (auto primary_cell : ip_cells.primary) {
     assert(itr_cells.has_next());
     size_t id =primary_cell;
@@ -216,7 +222,8 @@ fill_expanded_lr_task(
     ptr_t ptr = itr_cells.next();
     acc_cells.write(ptr, id);
   }
-  
+
+
   //vertices
   LegionRuntime::HighLevel::LogicalRegion lr_vert =
       regions[1].get_logical_region(); 
