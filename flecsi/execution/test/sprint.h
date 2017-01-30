@@ -56,6 +56,7 @@ mpi_task(
   ip_cells.exclusive = weaver.get_exclusive_cells();
   ip_cells.shared = weaver.get_shared_cells();
   ip_cells.ghost  = weaver.get_ghost_cells();
+  ip_cells.entities_per_rank = weaver.get_n_cells_per_rank();
 
   index_partition_t ip_vertices;
 
@@ -63,6 +64,7 @@ mpi_task(
   ip_vertices.exclusive = weaver.get_exclusive_vertices();
   ip_vertices.shared = weaver.get_shared_vertices();
   ip_vertices.ghost  = weaver.get_ghost_vertices();
+  ip_vertices.entities_per_rank = weaver.get_n_vertices_per_rank();
 
   std::vector<std::pair<size_t, size_t>> raw_conns = 
     weaver.get_raw_cell_vertex_conns();
@@ -460,6 +462,7 @@ driver(
   //cells_to_vertices.dump(2, 0);
   runtime->destroy_index_partition(context, raw_connectivity_part.ip);
   runtime->destroy_logical_region(context, raw_connectivity_part.lr);
+#endif
 
   //Data compaction: creating an index space with the size of global IS + ghost
   //partition of the global IS. we need it to create partitioning that will
