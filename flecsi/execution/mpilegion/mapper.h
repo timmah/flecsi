@@ -29,7 +29,8 @@ enum {
   // Use the first 8 bits for storing the rhsf index
   MAPPER_FORCE_RANK_MATCH = 0x00001000,
   MAPPER_SUBRANK_LAUNCH   = 0x00080000,
-  MAPPER_ALL_PROC         = 0x00020000
+  MAPPER_ALL_PROC         = 0x00020000,
+  MAPPER_TWO_D_RANK_PARTITIONING_LAUNCH  = 0x00030000
 };
 
 namespace flecsi {
@@ -179,6 +180,33 @@ MPIMapper : public Legion::Mapping::DefaultMapper
    	  }//end for
     	return;
 		}//endi if MAPPER_FORCE_RANK_MATCH
+
+    if ((task.tag & MAPPER_TWO_D_RANK_PARTITIONING_LAUNCH) !=0){
+	    // expect a 2-D index domain - first component is the processor index,
+  	  //  and second is the MPI rank
+    	assert(input.domain.get_dim() == 2);
+    	LegionRuntime::Arrays::Rect<2> r = input.domain.get_rect<2>();
+
+	    using legion_machine=LegionRuntime::HighLevel::Machine;
+  	  using legion_proc=LegionRuntime::HighLevel::Processor;
+
+    	// get list of all processors and make sure the count matches
+	    legion_machine::ProcessorQuery pq =
+       legion_machine::ProcessorQuery(machine).only_kind(legion_proc::LOC_PROC);
+    	std::vector<legion_proc> all_procs(pq.begin(), pq.end());
+    	assert((r.lo[0] == 0) && (r.hi[0] == (int)(all_procs.size() - 1)));
+
+	    // now create a slice for each processor, allowing it to try to connect to
+  	  //  each MPI rank
+    	output.slices.resize(all_procs.size());
+	    for(size_t i = 0; i < all_procs.size(); i++) {
+  	    LegionRuntime::Arrays::Rect<2> subrect = r;
+    	  subrect.lo.x[0] = subrect.hi.x[0] = i;
+	      output.slices[i].domain = Legion::Domain::from_rect<2>(subrect);
+  	    output.slices[i].proc = all_procs[i];
+    	}//end for
+	    return;
+	  } //end if task.tag= 
 
 /*  	if((task.tag & MAPPER_SUBRANK_LAUNCH) != 0) {
     	// expect a 1-D index domain

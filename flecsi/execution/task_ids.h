@@ -103,6 +103,7 @@ class field_ids_t
   size_t fid_entry_offset = unique_fid_t::instance().next();
   size_t fid_value = unique_fid_t::instance().next();
   size_t fid_partition_metadata = unique_fid_t::instance().next();
+  size_t fid_point = unique_fid_t::instance().next();
 //  size_t fid_connectivity = unique_fid_t::instance().next(); 
 };
 

@@ -188,7 +188,8 @@ fill_expanded_lr_task(
     context_.interop_helper_.data_storage_[0];
   index_partition_t ip_vert =
     context_.interop_helper_.data_storage_[1];
-  
+
+#if 0  
   //cells:
   LegionRuntime::HighLevel::LogicalRegion lr_cells =
       regions[0].get_logical_region(); 
@@ -250,7 +251,7 @@ fill_expanded_lr_task(
     ptr_t ptr = itr_vert.next();
     acc_vert.write(ptr, id);
   }
-
+#endif
 }//fill_expanded_lr_task
 
 /*partition_lr
@@ -945,7 +946,11 @@ ghost_access_task(
   using generic_type = LegionRuntime::Accessor::AccessorType::Generic;
   using field_id = LegionRuntime::HighLevel::FieldID;
 
-  assert(task->local_arglen >= sizeof(SPMDArgs));
+  int num_ranks;
+  MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+  size_t cells_start_id[num_ranks];
+
+  //assert(task->local_arglen >= sizeof(cells_start_id));
   assert(regions.size() == 2);
   assert(task->regions.size() == 2);
   assert(task->regions[0].privilege_fields.size() == 1);
@@ -953,6 +958,9 @@ ghost_access_task(
   assert(task->index_point.get_dim() == 1);
   const int my_rank = task->index_point.point_data[0];
 
+  //&cells_start_id = *((const size_t*)task->args);
+
+#if 0
   SPMDArgs args;
   SPMDArgsSerializer args_serializer;
   args_serializer.setBitStream(task->local_args);
@@ -1055,7 +1063,7 @@ ghost_access_task(
 
 */
 
-
+#endif
   std::cout << "test ghost access ... passed"
   << std::endl;
 }//ghost_access_task
