@@ -19,6 +19,8 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
     list(APPEND example_src ${exec_path}/mpilegion/runtime_driver.cc
                             ${exec_path}/legion/dpd.cc
                             ${exec_path}/mpilegion/init_partitions_task.cc)
+elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpi")
+    list(APPEND example_src ${exec_path}/mpi/runtime_driver.cc)
 else()
     message(FATAL_ERROR "This runtime is not yet supported")
 endif()
