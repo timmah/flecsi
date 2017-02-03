@@ -314,48 +314,53 @@ driver(
 
   fill_expanded_lr_launcher.add_region_requirement(
     RegionRequirement(expanded_cells_lp, 0/*projection ID*/,
-      WRITE_DISCARD, EXCLUSIVE, expanded_cells_lr));
-  fill_expanded_lr_launcher.add_field(0, fid_t.fid_data);
+      WRITE_DISCARD, EXCLUSIVE, expanded_cells_lr))
+                            .add_field(fid_t.fid_data)
+                            .add_field(fid_t.fid_point);
 
   fill_expanded_lr_launcher.add_region_requirement(
     RegionRequirement(expanded_vertices_lp, 0/*projection ID*/,
-      WRITE_DISCARD, EXCLUSIVE, expanded_vertices_lr));
-  fill_expanded_lr_launcher.add_field(1, fid_t.fid_data);
+      WRITE_DISCARD, EXCLUSIVE, expanded_vertices_lr))
+                            .add_field(fid_t.fid_data)
+                            .add_field(fid_t.fid_point);
 
   FutureMap fm3 = runtime->execute_index_space( context,
       fill_expanded_lr_launcher);
 
   fm3.wait_all_results();  
 
-#if 0
 
   LegionRuntime::HighLevel::IndexLauncher ghost_access_launcher(
   task_ids_t::instance().ghost_access_task_id,
-  rank_domain,
+  cells_launch_domain,
   LegionRuntime::HighLevel::TaskArgument(0, 0),
   arg_map);
 
-  ghost_access_launcher.tag = MAPPER_FORCE_RANK_MATCH;
+  ghost_access_launcher.tag = MAPPER_TWO_D_RANK_PARTITIONING_LAUNCH;
 
   ghost_access_launcher.add_region_requirement(
   RegionRequirement(expanded_cells_lr,
-                    READ_ONLY, SIMULTANEOUS, expanded_cells_lr));
-  ghost_access_launcher.add_field(0, fid_t.fid_data);
+                    READ_ONLY, SIMULTANEOUS, expanded_cells_lr))
+                       .add_field(fid_t.fid_data);
 
   ghost_access_launcher.add_region_requirement(
   RegionRequirement(expanded_cells_lp, 0/*projection ID*/,
-                    READ_ONLY, SIMULTANEOUS, expanded_cells_lr));
-  ghost_access_launcher.add_field(1, fid_t.fid_data);
+                    READ_ONLY, SIMULTANEOUS, expanded_cells_lr))
+                       .add_field(fid_t.fid_data)
+                       .add_field(fid_t.fid_point);
 
   MustEpochLauncher must_epoch_launcher;
   must_epoch_launcher.add_index_task(ghost_access_launcher);
 
   FutureMap fm7 = runtime->execute_must_epoch(context,must_epoch_launcher);
   fm7.wait_all_results();
-#endif
 
 
   //TOFIX: free all lr physical regions is
+  runtime->destroy_index_partition(context,expanded_cells_ip);
+  runtime->destroy_index_partition(context, expanded_vertices_ip);
+  runtime->destroy_logical_partition(context, expanded_cells_lp);
+  runtime->destroy_logical_partition(context, expanded_vertices_lp);
   runtime->destroy_logical_region(context, expanded_vertices_lr);
   runtime->destroy_logical_region(context, expanded_cells_lr);
   runtime->destroy_field_space(context, vertices_fs);

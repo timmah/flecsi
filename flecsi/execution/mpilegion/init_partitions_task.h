@@ -67,12 +67,6 @@ get_numbers_of_cells_task(
   Legion::Context ctx, Legion::HighLevelRuntime *runtime
 );
 
-void
-initialization_task(
-  const Legion::Task *task, 
-  const std::vector<Legion::PhysicalRegion> & regions,
-  Legion::Context ctx, Legion::HighLevelRuntime *runtime
-);
 
 void
 fill_expanded_lr_task(
@@ -81,27 +75,7 @@ fill_expanded_lr_task(
   Legion::Context ctx, Legion::HighLevelRuntime *runtime
 );
 
-/*partition_lr
-shared_part_task(
-  const Legion::Task *task,
-  const std::vector<Legion::PhysicalRegion> & regions,
-  Legion::Context ctx, Legion::HighLevelRuntime *runtime
-);
-
-partition_lr
-exclusive_part_task(
-  const Legion::Task *task,
-  const std::vector<Legion::PhysicalRegion> & regions,
-  Legion::Context ctx, Legion::HighLevelRuntime *runtime
-);
-
-partition_lr
-ghost_part_task(
-  const Legion::Task *task,
-  const std::vector<Legion::PhysicalRegion> & regions,
-  Legion::Context ctx, Legion::HighLevelRuntime *runtime
-);
-
+/*
 void
 check_partitioning_task(
   const Legion::Task *task,
