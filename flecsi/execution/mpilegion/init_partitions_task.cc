@@ -365,6 +365,13 @@ ghost_access_task(
   field_id expanded_cells_part_fid =
       *(task->regions[1].privilege_fields.begin());
 
+  Domain expanded_cells_part_dom =
+      runtime->get_index_space_domain(ctx, expanded_cells_part_is);
+  Rect<2> cells_rect = expanded_cells_part_dom.get_rect<2>();
+
+//std::cout<<"cells_rect = " << cells_rect.lo[0]<<" "<<cells_rect.hi[0]<< " " <<
+//cells_rect.lo[1]<<" "<<cells_rect.hi[1]<<std::endl;
+
   //partition cells_part_lr into primary, ghost, exclusive and shared
 
   IndexPartition primary_cells_ip;
@@ -378,7 +385,25 @@ ghost_access_task(
   LogicalPartition primary_cells_lp=runtime->get_logical_partition(ctx,
            expanded_cells_part_lr, primary_cells_ip);
 
-   
+  IndexPartition ghost_cells_ip;
+  {
+   Rect<1> colorBounds(make_point(0),make_point(1));
+   Domain color_domain = Domain::from_rect<1>(colorBounds);
+   size_t ghost_start = ip_cells.primary.size();
+   size_t ghost_end = ghost_start + ip_cells.ghost.size();
+   Rect<2> subrect(make_point(0,ghost_start), make_point(0, ghost_end ));
+//std::cout<<"subrect = " << subrect.lo[0]<<" "<<subrect.hi[0]<< " " <<
+//subrect.lo[1]<<" "<<subrect.hi[1]<<std::endl;
+   DomainColoring coloring;
+   coloring[0]=Domain::from_rect<2>(subrect);
+   ghost_cells_ip=runtime->create_index_partition(ctx, expanded_cells_part_is, 
+          color_domain, coloring, true);
+  }  
+  LogicalPartition ghost_cells_lp=runtime->get_logical_partition(ctx,
+           expanded_cells_part_lr, ghost_cells_ip);
+ 
+
+
 
 #if 0
   for (int cycle = 0; cycle < 2; cycle++) {
