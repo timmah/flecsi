@@ -26,7 +26,7 @@
            << ": " << #X << " = " << (X) << std::endl
 
 ///
-// \file legion/dpd.h
+// \file data/legion/dpd.h
 // \authors nickm
 // \date Initial file creation: Nov 29, 2016
 ///

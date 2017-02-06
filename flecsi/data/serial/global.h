@@ -242,7 +242,7 @@ private:
 //----------------------------------------------------------------------------//
 
 template<typename T, size_t PS>
-struct global_handle_t : public data_handle_t
+struct global_handle_t : public data_handle__<T, PS>
 {
   using type = T;
 }; // struct global_handle_t

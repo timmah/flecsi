@@ -247,7 +247,7 @@ private:
 //----------------------------------------------------------------------------//
 
 template<typename T, size_t PS>
-struct dense_handle_t : public data_handle_t
+struct dense_handle_t : public data_handle__<T, PS>
 {
   using type = T;
 }; // struct dense_handle_t
@@ -311,7 +311,9 @@ struct storage_type_t<dense, DS, MD>
     Args && ... args
   )
   {
-    return {};
+    return {
+      data_store = 35;
+    };
   } // register_data
 
   //--------------------------------------------------------------------------//

@@ -47,7 +47,6 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "legion")
   set(execution_HEADERS
     ${execution_HEADERS}
     legion/context_policy.h
-    legion/dpd.h
     legion/future.h
     legion/execution_policy.h
     legion/runtime_driver.h
@@ -57,10 +56,6 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "legion")
     PARENT_SCOPE
   )
 
-  set(execution_SOURCES
-    legion/dpd.cc
-  )
-
   set(UNIT_POLICY LEGION)
   set(RUNTIME_DRIVER legion/runtime_driver.cc)
 
@@ -68,7 +63,6 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
 
   set(execution_HEADERS
     ${execution_HEADERS}
-    legion/dpd.h
     legion/task_args.h
     legion/task_wrapper.h
     mpilegion/context_policy.h
@@ -82,7 +76,6 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
   )
 
   set(execution_SOURCES
-    legion/dpd.cc
     mpilegion/init_partitions_task.cc
   )
 
@@ -145,7 +138,6 @@ if(NOT DEFINED ENV{TRAVIS})
         test/task_driver.h
         mpilegion/runtime_driver.cc
         mpilegion/init_partitions_task.cc
-        legion/dpd.cc
       DEFINES
         FLECSI_DRIVER=flecsi/execution/test/task_driver.h
         TEST_INIT=flecsi/execution/test/task_init.h
@@ -182,29 +174,10 @@ if(NOT DEFINED ENV{TRAVIS})
           test/sprint.h
           mpilegion/runtime_driver.cc
           mpilegion/init_partitions_task.cc
-          legion/dpd.cc
         INPUTS
           test/simple2d-8x8.msh
         DEFINES SPRINT_TEST
           FLECSI_DRIVER=flecsi/execution/test/sprint.h
-          TEST_INIT=flecsi/execution/test/task_init.h
-        LIBRARIES ${PARTITION_LIBRARIES}
-        POLICY MPILEGION
-        THREADS 2
-      )
-    endif()
-
-    if(ENABLE_PARTITIONING AND ENABLE_PARMETIS)
-      cinch_add_unit(mpilegion_data_handle
-        SOURCES
-          test/task.cc
-          test/data-handle.h
-          mpilegion/runtime_driver.cc
-          mpilegion/init_partitions_task.cc
-          ../data/data_client.cc
-          legion/dpd.cc
-        DEFINES DATA_HANDLE_TEST
-          FLECSI_DRIVER=flecsi/execution/test/data-handle.h
           TEST_INIT=flecsi/execution/test/task_init.h
         LIBRARIES ${PARTITION_LIBRARIES}
         POLICY MPILEGION

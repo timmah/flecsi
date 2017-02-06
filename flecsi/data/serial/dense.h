@@ -381,7 +381,7 @@ private:
 //----------------------------------------------------------------------------//
 
 template<typename T, size_t PS>
-struct dense_handle_t : public data_handle_t
+struct dense_handle_t : public data_handle__<T, PS>
 {
   using type = T;
 }; // struct dense_handle_t

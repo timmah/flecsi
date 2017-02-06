@@ -57,6 +57,35 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "legion")
     legion/tuple.h
   )
 
+elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
+
+  if(ENABLE_PARTITIONING AND ENABLE_PARMETIS)
+    cinch_add_unit(mpilegion_data_handle
+      SOURCES
+        ../execution/test/task.cc
+        test/data-handle.h
+        ../execution/mpilegion/runtime_driver.cc
+        ../execution/mpilegion/init_partitions_task.cc
+        data_client.cc
+        legion/dpd.cc
+      DEFINES DATA_HANDLE_TEST
+        FLECSI_DRIVER=flecsi/data/test/data-handle.h
+        TEST_INIT=flecsi/execution/test/task_init.h
+      LIBRARIES ${PARTITION_LIBRARIES}
+      POLICY MPILEGION
+      THREADS 2
+    )
+  endif()
+
+#  cinch_add_unit(dpd_sparse
+#    SOURCES
+#      test/dpd_sparse.cc
+#      legion/dpd.cc
+#    POLICY
+#      MPILEGION
+#   THREADS 2
+#  )
+
 endif()
 
 set(data_HEADERS
