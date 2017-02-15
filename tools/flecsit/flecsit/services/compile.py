@@ -65,6 +65,10 @@ class FleCSIT_Analysis(Service):
                  ' command line arguements.'
         )
 
+        self.parser.add_argument('-g', '--debug', action='store_true',
+            help='Turn on debug symbols.'
+        )
+
         self.parser.add_argument('-v', '--verbose', action='store_true',
             help='Turn on verbose output.'
         )
@@ -95,6 +99,10 @@ class FleCSIT_Analysis(Service):
         env_includes = os.getenv('FLECSIT_INCLUDES')
         env_ldflags = os.getenv('FLECSIT_LDFLAGS')
         env_libraries = os.getenv('FLECSIT_LIBRARIES')
+
+        # Add debug flags if debug has been selected
+        if args.debug:
+            build['flags'] += ' ' + build['debug_flags']
 
         # Add any user-provided include paths to build
         if env_includes is not None:
