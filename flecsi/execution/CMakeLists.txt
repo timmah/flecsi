@@ -149,6 +149,34 @@ cinch_add_unit(simple_function
 )
 endif()
 
+if (FLECSI_RUNTIME_MODEL STREQUAL "mpi")
+    cinch_add_unit(entity_indices
+  SOURCES
+    test/mpi/entity_indices.cpp
+    ${RUNTIME_DRIVER}
+  DEFINES
+  POLICY
+    ${UNIT_POLICY}
+  LIBRARIES
+    flecsi
+    ${CINCH_RUNTIME_LIBRARIES} ${PARTITION_LIBRARIES}
+)
+
+cinch_add_unit(game_of_life
+  SOURCES
+    #runtime_main.cc
+    test/mpi/game_of_life.cpp
+    test/mpi/game_of_life.h
+    ${RUNTIME_DRIVER}
+  DEFINES
+    FLECSI_DRIVER=flecsi/execution/test/mpi/game_of_life.h
+  POLICY
+    ${UNIT_POLICY}
+  LIBRARIES
+    flecsi
+    ${CINCH_RUNTIME_LIBRARIES} ${PARTITION_LIBRARIES}
+)
+endif()
 if(NOT DEFINED ENV{TRAVIS})
   if(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
 

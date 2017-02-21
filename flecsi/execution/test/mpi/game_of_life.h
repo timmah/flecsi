@@ -22,14 +22,15 @@ void driver(int argc, char **argv) {
 
   using entry_info_t = flecsi::dmp::entry_info_t;
 
-  // primary cells are the ids of all the cell owned by this node. Since
-  // it is backed by a std::set, they are ordered by the ids. However, it
-  // does not start from 0 and is not consecutive thus should not be
-  // used to index into an local array.
+  // primary cells are the ids of all the cell owned by this node that includes
+  // both exclusive and shared cells . Since it is backed by a std::set, they
+  // are ordered by the ids. However, it does not start from 0 and is not
+  // consecutive thus should not be used to index into an local array.
   std::set <size_t> primary_cells = weaver.get_primary_cells();
 
-  // currently alive is an unordered_map for cell id to data field.
-  // this should be encapsulate into the data accessor/handler.
+  // Thus we need to create a map that maps cell ids to either index of an array or
+  // just a map from cell id to field of the cell. Currently alive is an unordered_map
+  // for cell id to data field. this should be encapsulate into the data accessor/handler.
   std::unordered_map<size_t, int> alive;
   for (auto cell: primary_cells) {
     alive[cell] = 0;
@@ -89,6 +90,7 @@ void driver(int argc, char **argv) {
     // This should be replace with some kind of "task"
     for (auto cell : primary_cells) {
       std::set <size_t> me{cell};
+      // FIXME: connectivity information should be part of distributed data as well.
       auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, me);
       auto nearest_neighbors = flecsi::utils::set_difference(closure, me);
 
