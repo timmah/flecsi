@@ -14,7 +14,8 @@
 #include "flecsi/topology/graph_utils.h"
 #include "flecsi/execution/execution.h"
 
-void stencil_task(flecsi::io::simple_definition_t& sd, std::set<size_t>& primary_cells,
+void stencil_task(flecsi::io::simple_definition_t& sd,
+                  const std::set<size_t>& primary_cells,
                   std::unordered_map<size_t, int>& alive,
                   std::unordered_map<size_t, int>& alive2)
 {
@@ -56,7 +57,34 @@ void stencil_task(flecsi::io::simple_definition_t& sd, std::set<size_t>& primary
   std::swap(alive, alive2);
 }
 
+void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
+                        std::set<flecsi::dmp::entry_info_t>& shared_cells,
+                        std::set<flecsi::dmp::entry_info_t>& ghost_cells,
+                        std::unordered_map<size_t, int>& alive)
+{
+  std::vector <MPI_Request> requests;
+
+  // Post receive for ghost cells
+  for (auto ghost : ghost_cells) {
+    requests.push_back({});
+    MPI_Irecv(&alive[ghost.id], 1, MPI_INT,
+              ghost.rank, 0, MPI_COMM_WORLD, &requests[requests.size() - 1]);
+  }
+
+  // Send shared cells
+  for (auto shared : shared_cells) {
+    for (auto dest: shared.shared) {
+      MPI_Send(&alive[shared.id], 1, MPI_INT,
+               dest, 0, MPI_COMM_WORLD);
+    }
+  }
+
+  std::vector <MPI_Status> status(requests.size());
+  MPI_Waitall(requests.size(), &requests[0], &status[0]);
+}
+
 register_task(stencil_task, loc, single);
+register_task(halo_exchange_task, loc, single);
 
 void driver(int argc, char **argv) {
   int rank;
@@ -71,7 +99,7 @@ void driver(int argc, char **argv) {
   // both exclusive and shared cells . Since it is backed by a std::set, they
   // are ordered by the ids. However, it does not start from 0 and is not
   // consecutive thus should not be used to index into an local array.
-  std::set <size_t> primary_cells = weaver.get_primary_cells();
+  std::set<size_t> primary_cells = weaver.get_primary_cells();
 
   // Thus we need to create a map that maps cell ids to either index of an array or
   // just a map from cell id to field of the cell. Currently alive is an unordered_map
@@ -113,24 +141,7 @@ void driver(int argc, char **argv) {
   auto alive2 = alive;
 
   for (auto i = 0; i < 5; i++) {
-    // Do halo exchange first, replace with some kind of "halo exchange" task.
-    std::vector <MPI_Request> requests;
-    // Post receive for ghost cells
-    for (auto ghost : ghost_cells) {
-      requests.push_back({});
-      MPI_Irecv(&alive[ghost.id], 1, MPI_INT,
-                ghost.rank, 0, MPI_COMM_WORLD, &requests[requests.size() - 1]);
-    }
-    // Send shared cells
-    for (auto shared : shared_cells) {
-      for (auto dest: shared.shared) {
-        MPI_Send(&alive[shared.id], 1, MPI_INT,
-                 dest, 0, MPI_COMM_WORLD);
-      }
-    }
-
-    std::vector <MPI_Status> status(requests.size());
-    MPI_Waitall(requests.size(), &requests[0], &status[0]);
+    execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, alive);
 
     execute_task(stencil_task, loc, single, sd, primary_cells, alive, alive2);
   }
