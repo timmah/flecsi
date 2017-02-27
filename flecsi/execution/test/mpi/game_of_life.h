@@ -93,7 +93,6 @@ struct mesh_t : public flecsi::data::data_client_t {
     switch(index_space_id) {
       case cells:
         // FIXME: hardcoded for 8x8 mesh and not partitioned.
-        // FIXME: what exactly does sparse storage expect?
         return 64;
       default:
         // FIXME: lookup user-defined index space
@@ -123,14 +122,12 @@ void driver(int argc, char **argv) {
   // for cell id to data field. this should be encapsulate into the data accessor/handler.
   mesh_t m;
 
-  // TODO: figure out all the parameters to register_data and get_mutator
-  // TODO: sparse data storage is NOT sparse in the index/cell id space
   register_data(m, gof, alive, int, dense, 2, cells);
 
   auto acc0 = get_accessor(m, gof, alive, int, dense, 0);
   auto acc1 = get_accessor(m, gof, alive, int, dense, 1);
 
-  // populate sparse data storage.
+  // populate data storage.
   for (auto cell: primary_cells) {
     acc0(cell) = acc1(cell) = 0;
   }
