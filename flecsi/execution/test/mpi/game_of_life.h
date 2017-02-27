@@ -22,8 +22,6 @@ void stencil_task(flecsi::io::simple_definition_t& sd,
                   const std::set<size_t>& primary_cells,
                   accessor_t<int>& a0,
                   accessor_t<int>& a1)
-                  //std::unordered_map<size_t, int>& alive,
-                  //std::unordered_map<size_t, int>& alive2)
 {
   // This should be replace with some kind of "task"
   for (auto cell : primary_cells) {
@@ -50,36 +48,18 @@ void stencil_task(flecsi::io::simple_definition_t& sd,
         a1(cell, 0) = 1;
     }
   }
-
-  //a1.commit();
-
-  for (auto cell : primary_cells) {
-    if (a1(cell, 0) == 1) {
-      std::cout << "primary cell: " << cell
-                << ", alive: " << a1(cell, 0)
-                << std::endl;
-    }
-  }
-  std::cout << std::endl;
-
-  //std::swap(alive, alive2);
 }
 
 void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
                         std::set<flecsi::dmp::entry_info_t>& shared_cells,
                         std::set<flecsi::dmp::entry_info_t>& ghost_cells,
                         accessor_t<int>& acc)
-//                        flecsi::data::serial::sparse_accessor_t acc)
-                        //std::unordered_map<size_t, int>& alive)
-
-
 {
   std::vector <MPI_Request> requests;
 
   // Post receive for ghost cells
   for (auto ghost : ghost_cells) {
     requests.push_back({});
-    //MPI_Irecv(&alive[ghost.id], 1, MPI_INT,
     MPI_Irecv(&acc(ghost.id, 0), 1, MPI_INT,
               ghost.rank, 0, MPI_COMM_WORLD, &requests[requests.size() - 1]);
   }
@@ -87,7 +67,6 @@ void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
   // Send shared cells
   for (auto shared : shared_cells) {
     for (auto dest: shared.shared) {
-      //MPI_Send(&alive[shared.id], 1, MPI_INT,
       MPI_Send(&acc(shared.id, 0), 1, MPI_INT,
                dest, 0, MPI_COMM_WORLD);
     }
@@ -142,13 +121,15 @@ void driver(int argc, char **argv) {
   // just a map from cell id to field of the cell. Currently alive is an unordered_map
   // for cell id to data field. this should be encapsulate into the data accessor/handler.
   mesh_t m;
+
   // TODO: figure out all the parameters to register_data and get_mutator
-  // FIXME: need to use two mutator for two versions.
   register_data(m, gof, alive, int, sparse, 2, cells, 1);
+
   // FIXME: what does slot mean?
   auto am0 = get_mutator(m, gof, alive, int, sparse, 0, 2);
   auto am1 = get_mutator(m, gof, alive, int, sparse, 1, 2);
 
+  // populate sparse data storage.
   for (auto cell: primary_cells) {
     am0(cell, 0) = am1(cell, 0) = 0;
   }
@@ -175,37 +156,27 @@ void driver(int argc, char **argv) {
   am1.commit();
 
   auto a0 = get_accessor(m, gof, alive, int, sparse, 0);
-  for (auto cell : primary_cells) {
-    if (a0(cell, 0) == 1) {
-      std::cout << "primary cell: " << cell
-                << ", alive: " << a0(cell, 0)
-                << std::endl;
-    }
-  }
-
-  for (auto i : a0.indices()) {
-    std::cout << "index: " << i << std::endl;
-  }
-
   auto a1 = get_accessor(m, gof, alive, int, sparse, 1);
-  for (auto cell : primary_cells) {
-    if (a1(cell, 0) == 1) {
-      std::cout << "primary cell: " << cell
-                << ", alive: " << a1(cell, 0)
-                << std::endl;
-    }
-  }
-
-  for (auto i : a1.indices()) {
-    std::cout << "index: " << i << std::endl;
-  }
 
   for (int i = 0; i < 5; i++) {
     execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, a0);
-    if (i %2 == 0)
+    if (i % 2 == 0) {
       execute_task(stencil_task, loc, single, sd, primary_cells, a0, a1);
-    else
+      ASSERT_EQ(a1(27, 0), 0);
+      ASSERT_EQ(a1(43, 0), 0);
+
+      ASSERT_EQ(a1(34, 0), 1);
+      ASSERT_EQ(a1(35, 0), 1);
+      ASSERT_EQ(a1(36, 0), 1);
+    } else {
       execute_task(stencil_task, loc, single, sd, primary_cells, a1, a0);
+      ASSERT_EQ(a0(34, 0), 0);
+      ASSERT_EQ(a0(36, 0), 0);
+
+      ASSERT_EQ(a0(27, 0), 1);
+      ASSERT_EQ(a0(35, 0), 1);
+      ASSERT_EQ(a0(43, 0), 1);
+    }
   }
 
 } // driver
