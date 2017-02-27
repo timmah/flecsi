@@ -13,11 +13,17 @@
 #include "flecsi/topology/index_space.h"
 #include "flecsi/topology/graph_utils.h"
 #include "flecsi/execution/execution.h"
+#include "flecsi/data/data.h"
+
+template<typename T>
+using accessor_t = flecsi::data::serial::sparse_accessor_t<T, flecsi::data::serial_meta_data_t<flecsi::default_user_meta_data_t> >;
 
 void stencil_task(flecsi::io::simple_definition_t& sd,
                   const std::set<size_t>& primary_cells,
-                  std::unordered_map<size_t, int>& alive,
-                  std::unordered_map<size_t, int>& alive2)
+                  accessor_t<int>& a0,
+                  accessor_t<int>& a1)
+                  //std::unordered_map<size_t, int>& alive,
+                  //std::unordered_map<size_t, int>& alive2)
 {
   // This should be replace with some kind of "task"
   for (auto cell : primary_cells) {
@@ -28,53 +34,61 @@ void stencil_task(flecsi::io::simple_definition_t& sd,
 
     int count = 0;
     for (auto neighbor : nearest_neighbors) {
-      if (neighbor != -1 && alive[neighbor] == 1) {
+      if (neighbor != -1 && a0(neighbor, 0) == 1) {
         count++;
       }
     }
-    if (alive[cell]) {
+    if (a0(cell, 0)) {
       if (count < 2)
-        alive2[cell] = 0;
+        a1(cell, 0) = 0;
       else if (count <= 3)
-        alive2[cell] = 1;
+        a1(cell, 0) = 1;
       else
-        alive2[cell] = 0;
+        a1(cell, 0) = 0;
     } else {
       if (count == 3)
-        alive2[cell] = 1;
+        a1(cell, 0) = 1;
     }
   }
 
+  //a1.commit();
+
   for (auto cell : primary_cells) {
-    if (alive2[cell] == 1) {
+    if (a1(cell, 0) == 1) {
       std::cout << "primary cell: " << cell
-                << ", alive: " << alive2[cell]
+                << ", alive: " << a1(cell, 0)
                 << std::endl;
     }
   }
   std::cout << std::endl;
 
-  std::swap(alive, alive2);
+  //std::swap(alive, alive2);
 }
 
 void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
                         std::set<flecsi::dmp::entry_info_t>& shared_cells,
                         std::set<flecsi::dmp::entry_info_t>& ghost_cells,
-                        std::unordered_map<size_t, int>& alive)
+                        accessor_t<int>& acc)
+//                        flecsi::data::serial::sparse_accessor_t acc)
+                        //std::unordered_map<size_t, int>& alive)
+
+
 {
   std::vector <MPI_Request> requests;
 
   // Post receive for ghost cells
   for (auto ghost : ghost_cells) {
     requests.push_back({});
-    MPI_Irecv(&alive[ghost.id], 1, MPI_INT,
+    //MPI_Irecv(&alive[ghost.id], 1, MPI_INT,
+    MPI_Irecv(&acc(ghost.id, 0), 1, MPI_INT,
               ghost.rank, 0, MPI_COMM_WORLD, &requests[requests.size() - 1]);
   }
 
   // Send shared cells
   for (auto shared : shared_cells) {
     for (auto dest: shared.shared) {
-      MPI_Send(&alive[shared.id], 1, MPI_INT,
+      //MPI_Send(&alive[shared.id], 1, MPI_INT,
+      MPI_Send(&acc(shared.id, 0), 1, MPI_INT,
                dest, 0, MPI_COMM_WORLD);
     }
   }
@@ -85,6 +99,29 @@ void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
 
 register_task(stencil_task, loc, single);
 register_task(halo_exchange_task, loc, single);
+
+enum mesh_index_spaces_t : size_t {
+  vertices,
+  edges,
+  faces,
+  cells
+}; // enum mesh_index_spaces_t
+
+struct mesh_t : public flecsi::data::data_client_t {
+
+  size_t indices(size_t index_space_id) const override {
+
+    switch(index_space_id) {
+      case cells:
+        // FIXME: hardcoded for 8x8 mesh.
+        return 64;
+      default:
+        // FIXME: lookup user-defined index space
+        clog_fatal("unknown index space");
+        return 0;
+    } // switch
+  }
+};
 
 void driver(int argc, char **argv) {
   int rank;
@@ -104,29 +141,27 @@ void driver(int argc, char **argv) {
   // Thus we need to create a map that maps cell ids to either index of an array or
   // just a map from cell id to field of the cell. Currently alive is an unordered_map
   // for cell id to data field. this should be encapsulate into the data accessor/handler.
-  std::unordered_map<size_t, int> alive;
-  for (auto cell: primary_cells) {
-    alive[cell] = 0;
-  }
+  mesh_t m;
+  // TODO: figure out all the parameters to register_data and get_mutator
+  // FIXME: need to use two mutator for two versions.
+  register_data(m, gof, alive, int, sparse, 2, cells, 1);
+  // FIXME: what does slot mean?
+  auto am0 = get_mutator(m, gof, alive, int, sparse, 0, 2);
+  auto am1 = get_mutator(m, gof, alive, int, sparse, 1, 2);
 
+  for (auto cell: primary_cells) {
+    am0(cell, 0) = am1(cell, 0) = 0;
+  }
   // initialize the center 3 cells to be alive (a row), it is a period 2 blinker
   // going horizontal and then vertical.
   if (primary_cells.count(27) != 0) {
-    alive[27] = 1;
+    am0(27, 0) = am1(27, 0) = 1;
   }
   if (primary_cells.count(35) != 0) {
-    alive[35] = 1;
+    am0(35, 0) = am1(35, 0) = 1;
   }
   if (primary_cells.count(43) != 0) {
-    alive[43] = 1;
-  }
-
-  for (auto cell : primary_cells) {
-    if (alive[cell] == 1) {
-      std::cout << "primary cell: " << cell
-                << ", alive: " << alive[cell]
-                << std::endl;
-    }
+    am0(43, 0) = am1(43, 0) = 1;
   }
 
   std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
@@ -134,17 +169,45 @@ void driver(int argc, char **argv) {
 
   // add entries for ghost cells (that is not own by us)
   for (auto ghost : ghost_cells) {
-    alive[ghost.id] = 0;
+    am0(ghost.id, 0) = am1(ghost.id, 0) = 0;
+  }
+  am0.commit();
+  am1.commit();
+
+  auto a0 = get_accessor(m, gof, alive, int, sparse, 0);
+  for (auto cell : primary_cells) {
+    if (a0(cell, 0) == 1) {
+      std::cout << "primary cell: " << cell
+                << ", alive: " << a0(cell, 0)
+                << std::endl;
+    }
   }
 
-  // We need two versions for the state update to work correctly.
-  auto alive2 = alive;
-
-  for (auto i = 0; i < 5; i++) {
-    execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, alive);
-
-    execute_task(stencil_task, loc, single, sd, primary_cells, alive, alive2);
+  for (auto i : a0.indices()) {
+    std::cout << "index: " << i << std::endl;
   }
+
+  auto a1 = get_accessor(m, gof, alive, int, sparse, 1);
+  for (auto cell : primary_cells) {
+    if (a1(cell, 0) == 1) {
+      std::cout << "primary cell: " << cell
+                << ", alive: " << a1(cell, 0)
+                << std::endl;
+    }
+  }
+
+  for (auto i : a1.indices()) {
+    std::cout << "index: " << i << std::endl;
+  }
+
+  for (int i = 0; i < 5; i++) {
+    execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, a0);
+    if (i %2 == 0)
+      execute_task(stencil_task, loc, single, sd, primary_cells, a0, a1);
+    else
+      execute_task(stencil_task, loc, single, sd, primary_cells, a1, a0);
+  }
+
 } // driver
 
 #endif //FLECSI_GAME_OF_LIFE_H
