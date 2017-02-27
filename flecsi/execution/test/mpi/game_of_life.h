@@ -16,7 +16,7 @@
 #include "flecsi/data/data.h"
 
 template<typename T>
-using accessor_t = flecsi::data::serial::sparse_accessor_t<T, flecsi::data::serial_meta_data_t<flecsi::default_user_meta_data_t> >;
+using accessor_t = flecsi::data::serial::dense_accessor_t<T, flecsi::data::serial_meta_data_t<flecsi::default_user_meta_data_t> >;
 
 void stencil_task(flecsi::io::simple_definition_t& sd,
                   const std::set<size_t>& primary_cells,
@@ -32,20 +32,20 @@ void stencil_task(flecsi::io::simple_definition_t& sd,
 
     int count = 0;
     for (auto neighbor : nearest_neighbors) {
-      if (neighbor != -1 && a0(neighbor, 0) == 1) {
+      if (a0(neighbor) == 1) {
         count++;
       }
     }
-    if (a0(cell, 0)) {
+    if (a0(cell)) {
       if (count < 2)
-        a1(cell, 0) = 0;
+        a1(cell) = 0;
       else if (count <= 3)
-        a1(cell, 0) = 1;
+        a1(cell) = 1;
       else
-        a1(cell, 0) = 0;
+        a1(cell) = 0;
     } else {
       if (count == 3)
-        a1(cell, 0) = 1;
+        a1(cell) = 1;
     }
   }
 }
@@ -60,14 +60,14 @@ void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
   // Post receive for ghost cells
   for (auto ghost : ghost_cells) {
     requests.push_back({});
-    MPI_Irecv(&acc(ghost.id, 0), 1, MPI_INT,
+    MPI_Irecv(&acc(ghost.id), 1, MPI_INT,
               ghost.rank, 0, MPI_COMM_WORLD, &requests[requests.size() - 1]);
   }
 
   // Send shared cells
   for (auto shared : shared_cells) {
     for (auto dest: shared.shared) {
-      MPI_Send(&acc(shared.id, 0), 1, MPI_INT,
+      MPI_Send(&acc(shared.id), 1, MPI_INT,
                dest, 0, MPI_COMM_WORLD);
     }
   }
@@ -92,7 +92,8 @@ struct mesh_t : public flecsi::data::data_client_t {
 
     switch(index_space_id) {
       case cells:
-        // FIXME: hardcoded for 8x8 mesh.
+        // FIXME: hardcoded for 8x8 mesh and not partitioned.
+        // FIXME: what exactly does sparse storage expect?
         return 64;
       default:
         // FIXME: lookup user-defined index space
@@ -123,26 +124,26 @@ void driver(int argc, char **argv) {
   mesh_t m;
 
   // TODO: figure out all the parameters to register_data and get_mutator
-  register_data(m, gof, alive, int, sparse, 2, cells, 1);
+  // TODO: sparse data storage is NOT sparse in the index/cell id space
+  register_data(m, gof, alive, int, dense, 2, cells);
 
-  // FIXME: what does slot mean?
-  auto am0 = get_mutator(m, gof, alive, int, sparse, 0, 2);
-  auto am1 = get_mutator(m, gof, alive, int, sparse, 1, 2);
+  auto acc0 = get_accessor(m, gof, alive, int, dense, 0);
+  auto acc1 = get_accessor(m, gof, alive, int, dense, 1);
 
   // populate sparse data storage.
   for (auto cell: primary_cells) {
-    am0(cell, 0) = am1(cell, 0) = 0;
+    acc0(cell) = acc1(cell) = 0;
   }
   // initialize the center 3 cells to be alive (a row), it is a period 2 blinker
   // going horizontal and then vertical.
   if (primary_cells.count(27) != 0) {
-    am0(27, 0) = am1(27, 0) = 1;
+    acc0(27) = acc1(27) = 1;
   }
   if (primary_cells.count(35) != 0) {
-    am0(35, 0) = am1(35, 0) = 1;
+    acc0(35) = acc1(35) = 1;
   }
   if (primary_cells.count(43) != 0) {
-    am0(43, 0) = am1(43, 0) = 1;
+    acc0(43) = acc1(43) = 1;
   }
 
   std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
@@ -150,32 +151,28 @@ void driver(int argc, char **argv) {
 
   // add entries for ghost cells (that is not own by us)
   for (auto ghost : ghost_cells) {
-    am0(ghost.id, 0) = am1(ghost.id, 0) = 0;
+    acc0(ghost.id) = acc1(ghost.id) = 0;
   }
-  am0.commit();
-  am1.commit();
-
-  auto a0 = get_accessor(m, gof, alive, int, sparse, 0);
-  auto a1 = get_accessor(m, gof, alive, int, sparse, 1);
 
   for (int i = 0; i < 5; i++) {
-    execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, a0);
     if (i % 2 == 0) {
-      execute_task(stencil_task, loc, single, sd, primary_cells, a0, a1);
-      ASSERT_EQ(a1(27, 0), 0);
-      ASSERT_EQ(a1(43, 0), 0);
+      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc0);
+      execute_task(stencil_task, loc, single, sd, primary_cells, acc0, acc1);
+      ASSERT_EQ(acc1(27), 0);
+      ASSERT_EQ(acc1(43), 0);
 
-      ASSERT_EQ(a1(34, 0), 1);
-      ASSERT_EQ(a1(35, 0), 1);
-      ASSERT_EQ(a1(36, 0), 1);
+      ASSERT_EQ(acc1(34), 1);
+      ASSERT_EQ(acc1(35), 1);
+      ASSERT_EQ(acc1(36), 1);
     } else {
-      execute_task(stencil_task, loc, single, sd, primary_cells, a1, a0);
-      ASSERT_EQ(a0(34, 0), 0);
-      ASSERT_EQ(a0(36, 0), 0);
+      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc1);
+      execute_task(stencil_task, loc, single, sd, primary_cells, acc1, acc0);
+      ASSERT_EQ(acc0(34), 0);
+      ASSERT_EQ(acc0(36), 0);
 
-      ASSERT_EQ(a0(27, 0), 1);
-      ASSERT_EQ(a0(35, 0), 1);
-      ASSERT_EQ(a0(43, 0), 1);
+      ASSERT_EQ(acc0(27), 1);
+      ASSERT_EQ(acc0(35), 1);
+      ASSERT_EQ(acc0(43), 1);
     }
   }
 
