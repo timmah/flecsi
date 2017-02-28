@@ -23,20 +23,26 @@
 
 // Serial Policy
 #if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_serial
-
+  #include "flecsi/data/serial/handle_policy.h"
+  #include "flecsi/data/serial/data_policy.h"
   #include "flecsi/data/default_user_meta_data.h"
   #include "flecsi/data/serial/storage_policy.h"
 
   namespace flecsi {
   namespace data {
 
-  using flecsi_user_meta_data_policy_t = default_user_meta_data_t;
-  template<typename T>
+  using flecsi_handle_policy_t = serial_handle_policy_t;
 
+  using flecsi_data_policy_t = serial_data_policy_t;
+
+  using flecsi_user_meta_data_policy_t = default_user_meta_data_t;
+  
+  template<typename T>
   using flecsi_storage_policy_t = serial_storage_policy_t<T>;
 
   }
   }
+
 
 //Legion Policy
 #elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_legion || \

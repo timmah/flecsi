@@ -6,6 +6,8 @@
 #ifndef flecsi_data_storage_h
 #define flecsi_data_storage_h
 
+#include "flecsi_runtime_data_policy.h"
+
 #include "flecsi/utils/const_string.h"
 #include "flecsi/data/data_client.h"
 
