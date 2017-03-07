@@ -231,19 +231,19 @@ public:
   }
 
   // FIXME: should I return const & of the data member instead of copy?
-  std::set<size_t> get_primary_cells() {
+  std::set<size_t> get_primary_cells() const {
     return primary_cells;
   }
 
-  std::set<entry_info_t> get_exclusive_cells() {
+  std::set<entry_info_t> get_exclusive_cells() const {
     return exclusive_cells;
   }
 
-  std::set<entry_info_t> get_shared_cells() {
+  std::set<entry_info_t> get_shared_cells() const {
     return shared_cells;
   }
 
-  std::set<entry_info_t> get_ghost_cells() {
+  std::set<entry_info_t> get_ghost_cells() const {
     return ghost_cells;
   }
 

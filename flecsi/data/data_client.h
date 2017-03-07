@@ -56,7 +56,7 @@ public:
   // FIXME: This needs to be made pure virtual
   // The current virtual implementation is here to avoid
   // breaking the old data model.
-  //virtual size_t indices(size_t index_space) = 0;
+  //virtual size_t indices(size_t index_space) const = 0;
   virtual
   size_t
   indices(

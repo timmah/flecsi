@@ -22,6 +22,7 @@ namespace topology {
 ///
 /// \class graph_definition__ graph_definition.h
 /// \brief graph_definition__ provides...
+/// \tparam D geometrical dimension of vertex
 ///
 template<size_t D>
 class graph_definition__

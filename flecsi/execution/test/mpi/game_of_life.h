@@ -99,18 +99,23 @@ enum mesh_index_spaces_t : size_t {
 
 struct mesh_t : public flecsi::data::data_client_t {
 
+  mesh_t(flecsi::dmp::weaver& _weaver) : weaver(_weaver) {}
   size_t indices(size_t index_space_id) const override {
 
     switch(index_space_id) {
       case cells:
         // FIXME: hardcoded for 8x8 mesh and not partitioned.
-        return 64;
+        //return 64;
+      std::cout << "# of cells: " << weaver.get_primary_cells().size() + weaver.get_ghost_cells().size() << std::endl;
+        return weaver.get_primary_cells().size() + weaver.get_ghost_cells().size();
       default:
         // FIXME: lookup user-defined index space
         clog_fatal("unknown index space");
         return 0;
     } // switch
   }
+
+  flecsi::dmp::weaver weaver;
 };
 
 void driver(int argc, char **argv) {
@@ -131,7 +136,7 @@ void driver(int argc, char **argv) {
   // Thus we need to create a map that maps cell ids to either index of an array or
   // just a map from cell id to field of the cell. Currently alive is an unordered_map
   // for cell id to data field. this should be encapsulate into the data accessor/handler.
-  mesh_t m;
+  mesh_t m(weaver);
 
   register_data(m, gof, alive, int, dense, 2, cells);
 
@@ -154,8 +159,8 @@ void driver(int argc, char **argv) {
     acc0(43) = acc1(43) = 1;
   }
 
-  std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
-  std::set <entry_info_t> ghost_cells = weaver.get_ghost_cells();
+  std::set<entry_info_t> shared_cells = weaver.get_shared_cells();
+  std::set<entry_info_t> ghost_cells  = weaver.get_ghost_cells();
 
   // add entries for ghost cells (that is not own by us)
   for (auto ghost : ghost_cells) {
