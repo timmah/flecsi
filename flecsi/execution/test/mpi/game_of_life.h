@@ -32,7 +32,8 @@ using accessor_t = flecsi::data::serial::dense_accessor_t<T, flecsi::data::seria
 void stencil_task(flecsi::io::simple_definition_t& sd,
                   const std::set<size_t>& primary_cells,
                   accessor_t<int>& a0,
-                  accessor_t<int>& a1)
+                  accessor_t<int>& a1,
+                  std::unordered_map<size_t, size_t>& g2l)
 {
   // This should be replace with some kind of "task"
   for (auto cell : primary_cells) {
@@ -43,20 +44,20 @@ void stencil_task(flecsi::io::simple_definition_t& sd,
 
     int count = 0;
     for (auto neighbor : nearest_neighbors) {
-      if (a0(neighbor) == 1) {
+      if (a0(g2l[neighbor]) == 1) {
         count++;
       }
     }
-    if (a0(cell)) {
+    if (a0(g2l[cell])) {
       if (count < 2)
-        a1(cell) = 0;
+        a1(g2l[cell]) = 0;
       else if (count <= 3)
-        a1(cell) = 1;
+        a1(g2l[cell]) = 1;
       else
-        a1(cell) = 0;
+        a1(g2l[cell]) = 0;
     } else {
       if (count == 3)
-        a1(cell) = 1;
+        a1(g2l[cell]) = 1;
     }
   }
 }
@@ -64,21 +65,22 @@ void stencil_task(flecsi::io::simple_definition_t& sd,
 void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
                         std::set<flecsi::dmp::entry_info_t>& shared_cells,
                         std::set<flecsi::dmp::entry_info_t>& ghost_cells,
-                        accessor_t<int>& acc)
+                        accessor_t<int>& acc,
+                        std::unordered_map<size_t, size_t>& g2l)
 {
   std::vector <MPI_Request> requests;
 
   // Post receive for ghost cells
   for (auto ghost : ghost_cells) {
     requests.push_back({});
-    MPI_Irecv(&acc(ghost.id), 1, MPI_INT,
+    MPI_Irecv(&acc(g2l[ghost.id]), 1, MPI_INT,
               ghost.rank, 0, MPI_COMM_WORLD, &requests[requests.size() - 1]);
   }
 
   // Send shared cells
   for (auto shared : shared_cells) {
     for (auto dest: shared.shared) {
-      MPI_Send(&acc(shared.id), 1, MPI_INT,
+      MPI_Send(&acc(g2l[shared.id]), 1, MPI_INT,
                dest, 0, MPI_COMM_WORLD);
     }
   }
@@ -104,10 +106,6 @@ struct mesh_t : public flecsi::data::data_client_t {
 
     switch(index_space_id) {
       case cells:
-        // FIXME: hardcoded for 8x8 mesh and not partitioned.
-        return 64;
-//        std::cout << "# of cells: " << weaver.get_primary_cells().size() +
-//          weaver.get_ghost_cells().size() << std::endl;
         return weaver.get_primary_cells().size() + weaver.get_ghost_cells().size();
       default:
         // FIXME: lookup user-defined index space
@@ -129,14 +127,25 @@ void driver(int argc, char **argv) {
   using entry_info_t = flecsi::dmp::entry_info_t;
 
   // primary cells are the ids of all the cell owned by this node that includes
-  // both exclusive and shared cells . Since it is backed by a std::set, they
+  // both exclusive and shared cells. Since it is backed by a std::set, they
   // are ordered by the ids. However, it does not start from 0 and is not
   // consecutive thus should not be used to index into an local array.
   std::set<size_t> primary_cells = weaver.get_primary_cells();
+  std::set<entry_info_t> shared_cells = weaver.get_shared_cells();
+  std::set<entry_info_t> ghost_cells  = weaver.get_ghost_cells();
 
   // Thus we need to create a map that maps cell ids to either index of an array or
   // just a map from cell id to field of the cell. Currently alive is an unordered_map
   // for cell id to data field. this should be encapsulate into the data accessor/handler.
+  std::unordered_map<size_t, size_t> g2l;
+  size_t idx = 0;
+  for (auto cell : primary_cells) {
+    g2l[cell] = idx++;
+  }
+  for (auto cell : ghost_cells) {
+    g2l[cell.id] = idx++;
+  }
+
   mesh_t m(weaver);
 
   register_data(m, gof, alive, int, dense, 2, cells);
@@ -146,68 +155,64 @@ void driver(int argc, char **argv) {
 
   // populate data storage.
   for (auto cell: primary_cells) {
-    acc0(cell) = acc1(cell) = 0;
+    acc0(g2l[cell]) = acc1(g2l[cell]) = 0;
   }
   // initialize the center 3 cells to be alive (a row), it is a period 2 blinker
   // going horizontal and then vertical.
   if (primary_cells.count(27) != 0) {
-    acc0(27) = acc1(27) = 1;
+    acc0(g2l[27]) = acc1(g2l[27]) = 1;
   }
   if (primary_cells.count(35) != 0) {
-    acc0(35) = acc1(35) = 1;
+    acc0(g2l[35]) = acc1(g2l[35]) = 1;
   }
   if (primary_cells.count(43) != 0) {
-    acc0(43) = acc1(43) = 1;
+    acc0(g2l[43]) = acc1(g2l[43]) = 1;
   }
-
-  std::set<entry_info_t> shared_cells = weaver.get_shared_cells();
-  std::set<entry_info_t> ghost_cells  = weaver.get_ghost_cells();
 
   // add entries for ghost cells (that is not own by us)
   for (auto ghost : ghost_cells) {
-    acc0(ghost.id) = acc1(ghost.id) = 0;
+    acc0(g2l[ghost.id]) = acc1(g2l[ghost.id]) = 0;
   }
 
   for (int i = 0; i < 5; i++) {
     if (i % 2 == 0) {
-      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc0);
-      execute_task(stencil_task, loc, single, sd, primary_cells, acc0, acc1);
+      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc0, g2l);
+      execute_task(stencil_task, loc, single, sd, primary_cells, acc0, acc1, g2l);
       if (primary_cells.count(27) != 0) {
-        ASSERT_EQ(acc1(27), 0);
+        ASSERT_EQ(acc1(g2l[27]), 0);
       }
       if (primary_cells.count(43) != 0) {
-        ASSERT_EQ(acc1(43), 0);
+        ASSERT_EQ(acc1(g2l[43]), 0);
       }
       if (primary_cells.count(34) != 0) {
-        ASSERT_EQ(acc1(34), 1);
+        ASSERT_EQ(acc1(g2l[34]), 1);
       }
       if (primary_cells.count(35) != 0) {
-        ASSERT_EQ(acc1(35), 1);
+        ASSERT_EQ(acc1(g2l[35]), 1);
       }
       if (primary_cells.count(36) != 0) {
-        ASSERT_EQ(acc1(36), 1);
+        ASSERT_EQ(acc1(g2l[36]), 1);
       }
     } else {
-      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc1);
-      execute_task(stencil_task, loc, single, sd, primary_cells, acc1, acc0);
+      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc1, g2l);
+      execute_task(stencil_task, loc, single, sd, primary_cells, acc1, acc0, g2l);
       if (primary_cells.count(34) != 0) {
-        ASSERT_EQ(acc0(34), 0);
+        ASSERT_EQ(acc0(g2l[34]), 0);
       }
       if (primary_cells.count(36) != 0) {
-        ASSERT_EQ(acc0(36), 0);
+        ASSERT_EQ(acc0(g2l[36]), 0);
       }
       if (primary_cells.count(27) != 0) {
-        ASSERT_EQ(acc0(27), 1);
+        ASSERT_EQ(acc0(g2l[27]), 1);
       }
       if (primary_cells.count(35) != 0) {
-        ASSERT_EQ(acc0(35), 1);
+        ASSERT_EQ(acc0(g2l[35]), 1);
       }
       if (primary_cells.count(43) != 0) {
-        ASSERT_EQ(acc0(43), 1);
+        ASSERT_EQ(acc0(g2l[43]), 1);
       }
     }
   }
-
 } // driver
 
 #endif //FLECSI_GAME_OF_LIFE_H
