@@ -126,17 +126,17 @@ void driver(int argc, char **argv) {
 
   using entry_info_t = flecsi::dmp::entry_info_t;
 
-  // primary cells are the ids of all the cell owned by this node that includes
-  // both exclusive and shared cells. Since it is backed by a std::set, they
-  // are ordered by the ids. However, it does not start from 0 and is not
+  // primary cells are the global ids of all the cell owned by this node that
+  // includes both exclusive and shared cells. Since it is backed by a std::set,
+  // they are ordered by the ids. However, it does not start from 0 and is not
   // consecutive thus should not be used to index into an local array.
   std::set<size_t> primary_cells = weaver.get_primary_cells();
   std::set<entry_info_t> shared_cells = weaver.get_shared_cells();
   std::set<entry_info_t> ghost_cells  = weaver.get_ghost_cells();
 
-  // Thus we need to create a map that maps cell ids to either index of an array or
-  // just a map from cell id to field of the cell. Currently alive is an unordered_map
-  // for cell id to data field. this should be encapsulate into the data accessor/handler.
+  // Thus we need to create a map that maps global cell ids provided by the graph
+  // definition to indices of an array.
+  // This should be encapsulate into the data accessor/handler.
   std::unordered_map<size_t, size_t> g2l;
   size_t idx = 0;
   for (auto cell : primary_cells) {
@@ -159,6 +159,7 @@ void driver(int argc, char **argv) {
   }
   // initialize the center 3 cells to be alive (a row), it is a period 2 blinker
   // going horizontal and then vertical.
+  // FIXME: if we renumber global id, how are we going to do this kind of initialization?
   if (primary_cells.count(27) != 0) {
     acc0(g2l[27]) = acc1(g2l[27]) = 1;
   }

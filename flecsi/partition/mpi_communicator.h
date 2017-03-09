@@ -137,7 +137,8 @@ public:
       std::numeric_limits<size_t>::max());
 
     // For the primary partition, provide rank and cell information
-    // on indices that are shared with other processes.
+    // on indices that are shared with other processes. Elements
+    // for exclusive indices will be empty std::set<size_t>.
     std::vector<std::set<size_t>> local(primary.size());
 
     // See if we can fill any requests...
