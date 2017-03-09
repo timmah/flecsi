@@ -283,7 +283,7 @@ specialization_driver(
   Domain rank_domain = Domain::from_rect<1>(rank_rect);
 
 
-  LegionRuntime::HighLevel::IndexLauncher initialization_launcher(
+  LegionRuntime::HighLevel::IndexLauncher lax_tion_launcher(
     task_ids_t::instance().init_task_id,
     rank_domain,
     LegionRuntime::HighLevel::TaskArgument(0, 0),

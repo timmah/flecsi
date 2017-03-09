@@ -89,8 +89,8 @@ void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
   MPI_Waitall(requests.size(), &requests[0], &status[0]);
 }
 
-register_task(stencil_task, loc, single);
-register_task(halo_exchange_task, loc, single);
+flecsi_register_task(stencil_task, loc, single);
+flecsi_register_task(halo_exchange_task, loc, single);
 
 enum mesh_index_spaces_t : size_t {
   vertices,
@@ -144,7 +144,7 @@ void driver(int argc, char **argv) {
   std::map<size_t, size_t> g2l;
   size_t idx = 0;
 
-  // Ben wants to make ghost cells from lower ranks to come first such that the cells
+  // FIXME: Ben wants to make ghost cells from lower ranks to come first such that the cells
   // will be ordered in the order of global id in the local storage (I guess). However,
   // it does not actually work with the way ParMetis assign cells. For examples, when
   // partition the mesh into 4 pieces, ParMetis assigns cells at the lower right corners
@@ -161,16 +161,16 @@ void driver(int argc, char **argv) {
       g2l[cell.id] = idx++;
   }
 
-  if (rank == 0)
-    for (auto pair : g2l) {
-      std::cout << "global id: " << pair.first << ", local index: " << pair.second << std::endl;
-    }
+//  if (rank == 0)
+//    for (auto pair : g2l) {
+//      std::cout << "global id: " << pair.first << ", local index: " << pair.second << std::endl;
+//    }
   mesh_t m(weaver);
 
-  register_data(m, gof, alive, int, dense, 2, cells);
+  flecsi_register_data(m, gof, alive, int, dense, 2, cells);
 
-  auto acc0 = get_accessor(m, gof, alive, int, dense, 0);
-  auto acc1 = get_accessor(m, gof, alive, int, dense, 1);
+  auto acc0 = flecsi_get_accessor(m, gof, alive, int, dense, 0);
+  auto acc1 = flecsi_get_accessor(m, gof, alive, int, dense, 1);
 
   // populate data storage.
   for (auto cell: primary_cells) {
@@ -196,8 +196,8 @@ void driver(int argc, char **argv) {
 
   for (int i = 0; i < 5; i++) {
     if (i % 2 == 0) {
-      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc0, g2l);
-      execute_task(stencil_task, loc, single, sd, primary_cells, acc0, acc1, g2l);
+      flecsi_execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc0, g2l);
+      flecsi_execute_task(stencil_task, loc, single, sd, primary_cells, acc0, acc1, g2l);
       if (primary_cells.count(27) != 0) {
         ASSERT_EQ(acc1(g2l[27]), 0);
       }
@@ -214,8 +214,8 @@ void driver(int argc, char **argv) {
         ASSERT_EQ(acc1(g2l[36]), 1);
       }
     } else {
-      execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc1, g2l);
-      execute_task(stencil_task, loc, single, sd, primary_cells, acc1, acc0, g2l);
+      flecsi_execute_task(halo_exchange_task, loc, single, sd, shared_cells, ghost_cells, acc1, g2l);
+      flecsi_execute_task(stencil_task, loc, single, sd, primary_cells, acc1, acc0, g2l);
       if (primary_cells.count(34) != 0) {
         ASSERT_EQ(acc0(g2l[34]), 0);
       }
