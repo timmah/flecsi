@@ -33,7 +33,7 @@ void stencil_task(flecsi::io::simple_definition_t& sd,
                   const std::set<size_t>& primary_cells,
                   accessor_t<int>& a0,
                   accessor_t<int>& a1,
-                  std::unordered_map<size_t, size_t>& g2l)
+                  std::map<size_t, size_t>& g2l)
 {
   // This should be replace with some kind of "task"
   for (auto cell : primary_cells) {
@@ -66,7 +66,7 @@ void halo_exchange_task(const flecsi::io::simple_definition_t& sd,
                         std::set<flecsi::dmp::entry_info_t>& shared_cells,
                         std::set<flecsi::dmp::entry_info_t>& ghost_cells,
                         accessor_t<int>& acc,
-                        std::unordered_map<size_t, size_t>& g2l)
+                        std::map<size_t, size_t>& g2l)
 {
   std::vector <MPI_Request> requests;
 
@@ -134,18 +134,37 @@ void driver(int argc, char **argv) {
   std::set<entry_info_t> shared_cells = weaver.get_shared_cells();
   std::set<entry_info_t> ghost_cells  = weaver.get_ghost_cells();
 
+//  if (rank == 0)
+//    for (auto cell : primary_cells) {
+//      std::cout << "primary cell: " << cell << std::endl;
+//    }
   // Thus we need to create a map that maps global cell ids provided by the graph
   // definition to indices of an array.
   // This should be encapsulate into the data accessor/handler.
-  std::unordered_map<size_t, size_t> g2l;
+  std::map<size_t, size_t> g2l;
   size_t idx = 0;
+
+  // Ben wants to make ghost cells from lower ranks to come first such that the cells
+  // will be ordered in the order of global id in the local storage (I guess). However,
+  // it does not actually work with the way ParMetis assign cells. For examples, when
+  // partition the mesh into 4 pieces, ParMetis assigns cells at the lower right corners
+  // to rank 0, rather than rank 1 as I thought.
+  for (auto cell : ghost_cells) {
+    if (cell.rank < rank)
+      g2l[cell.id] = idx++;
+  }
   for (auto cell : primary_cells) {
     g2l[cell] = idx++;
   }
   for (auto cell : ghost_cells) {
-    g2l[cell.id] = idx++;
+    if (cell.rank > rank)
+      g2l[cell.id] = idx++;
   }
 
+  if (rank == 0)
+    for (auto pair : g2l) {
+      std::cout << "global id: " << pair.first << ", local index: " << pair.second << std::endl;
+    }
   mesh_t m(weaver);
 
   register_data(m, gof, alive, int, dense, 2, cells);
