@@ -153,9 +153,9 @@ cinch_add_unit(simple_function
 endif()
 
 if (FLECSI_RUNTIME_MODEL STREQUAL "mpi")
-    cinch_add_unit(entity_indices
+  cinch_add_unit(halo_exchange
   SOURCES
-    test/mpi/entity_indices.cpp
+    test/mpi/halo_exchange.cpp
     ${RUNTIME_DRIVER}
   DEFINES
   POLICY

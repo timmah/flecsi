@@ -134,9 +134,10 @@ void driver(int argc, char **argv) {
   std::set<entry_info_t> shared_cells = weaver.get_shared_cells();
   std::set<entry_info_t> ghost_cells  = weaver.get_ghost_cells();
 
+
 //  if (rank == 0)
-//    for (auto cell : primary_cells) {
-//      std::cout << "primary cell: " << cell << std::endl;
+//    for (auto cell : ghost_cells) {
+//      std::cout << "ghost cell: " << cell.rank << std::endl;
 //    }
   // Thus we need to create a map that maps global cell ids provided by the graph
   // definition to indices of an array.
