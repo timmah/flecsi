@@ -494,10 +494,8 @@ struct mpilegion_context_policy_t
     Legion::IndexPartition ghost_ip;
     // sizes
     size_t size;
-    size_t exclusive_size;
-    size_t shared_size;
-    size_t ghost_size;
     //number of elements per each part of the partition
+    partition_count_map_t primary_count_map;
     partition_count_map_t exclusive_count_map;
     partition_count_map_t shared_count_map;
     partition_count_map_t ghost_count_map;

@@ -85,9 +85,12 @@ specialization_driver(
 
   legion_helper h(runtime, context);
 
-  partition_vec cells(NUM_CELLS);
-  partition_vec cells_shared(NUM_CELLS, 999);
-  partition_vec cells_ghost(NUM_CELLS, 999);
+  const size_t NO_PARTITION = numeric_limits<size_t>::max();
+
+  partition_vec cells_primary(NUM_CELLS, NO_PARTITION);
+  partition_vec cells_exclusive(NUM_CELLS, NO_PARTITION);
+  partition_vec cells_shared(NUM_CELLS, NO_PARTITION);
+  partition_vec cells_ghost(NUM_CELLS, NO_PARTITION);
 
   size_t partition_size = NUM_CELLS / NUM_PARTITIONS;
 
@@ -96,111 +99,138 @@ specialization_driver(
   for(size_t c = 0; c < NUM_CELLS; ++c){
     size_t p = c / partition_size;
 
-    cells[c] = p;
+    cells_primary[c] = p;
+    ++cells_part.primary_count_map[p];
 
     if(c % partition_size == partition_size - 1 && c < NUM_CELLS - 1){
       cells_shared[c] = p;
       ++cells_part.shared_count_map[p];
 
-      cells_ghost[c + 1] = p + 1;
+      cells_ghost[c] = p + 1;
+      ++cells_part.ghost_count_map[p + 1];
+
+      cells_ghost[c + 1] = p;
+      ++cells_part.ghost_count_map[p];
+
+      cells_shared[c + 1] = p + 1;
       ++cells_part.shared_count_map[p + 1];
+    }
+    else{
+      cells_exclusive[c] = p;
     }
   }
 
+  map<size_t, ptr_t> primary_ptr_map;
+
+  map<size_t, ptr_t> ptr_map;
+
+  Coloring primary_coloring;
+  Coloring exclusive_coloring;
+  Coloring shared_coloring;
+  Coloring ghost_coloring;
+
+  cells_part.size = NUM_CELLS;
+
+  IndexSpace is = h.create_index_space(cells_part.size);
+
   {
-    cells_part.size = NUM_CELLS;
+        
+    for(size_t c = 0; c < cells_primary.size(); ++c){
+      size_t p = cells_primary[c];
+      assert(p < NUM_PARTITIONS);
+      ++cells_part.primary_count_map[p];
 
-    IndexSpace is = h.create_index_space(cells_part.size);
+      p = cells_exclusive[c];
+      if(p < NUM_PARTITIONS){
+        ++cells_part.exclusive_count_map[p];
+      }
 
-    IndexAllocator ia = runtime->create_index_allocator(context, is);
-    
-    Coloring coloring;
-    Coloring shared_coloring;
-    Coloring ghost_coloring;
-
-    for(size_t c = 0; c < cells.size(); ++c){
-      size_t p = cells[c]; 
-      ++cells_part.exclusive_count_map[p];
-      
-      if(cells_shared[c] < NUM_PARTITIONS){
+      p = cells_shared[c];
+      if(p < NUM_PARTITIONS){
         ++cells_part.shared_count_map[p];
       }
 
-      if(cells_ghost[c] < NUM_PARTITIONS){
+      p = cells_ghost[c];
+      if(p < NUM_PARTITIONS){
         ++cells_part.ghost_count_map[p];
       }
     }
 
-    for(auto& itr : cells_part.exclusive_count_map){
+    IndexAllocator ia = runtime->create_index_allocator(context, is);
+
+    for(auto& itr : cells_part.primary_count_map){
       size_t p = itr.first;
       int count = itr.second;
       ptr_t start = ia.alloc(count);
-
-      for(int i = 0; i < count; ++i){
-        coloring[p].points.insert(start + i);
-      }
+      primary_ptr_map[p] = start;
     }
 
-    for(auto& itr : cells_part.shared_count_map){
-      size_t p = itr.first;
-      int count = itr.second;
-      ptr_t start = ia.alloc(count);
-
-      for(int i = 0; i < count; ++i){
-        shared_coloring[p].points.insert(start + i);
-      }
+    for(size_t c = 0; c < cells_primary.size(); ++c){
+      size_t p = cells_primary[c];
+      auto itr = primary_ptr_map.find(p);
+      assert(itr != primary_ptr_map.end());
+      primary_coloring[p].points.insert(itr->second);
+      ptr_map[c] = itr->second++;
     }
-
-    for(auto& itr : cells_part.ghost_count_map){
-      size_t p = itr.first;
-      int count = itr.second;
-      ptr_t start = ia.alloc(count);
-
-      for(int i = 0; i < count; ++i){
-        ghost_coloring[p].points.insert(start + i);
-      }
-    }
-
-    FieldSpace fs = h.create_field_space();
-
-    FieldAllocator fa = h.create_field_allocator(fs);
-
-    fa.allocate_field(sizeof(entity_id), fid_t.fid_entity);
-    
-    cells_part.entities_lr = h.create_logical_region(is, fs);
-
-    RegionRequirement rr(cells_part.entities_lr, WRITE_DISCARD, 
-      EXCLUSIVE, cells_part.entities_lr);
-    
-    rr.add_field(fid_t.fid_entity);
-    InlineLauncher il(rr);
-
-    PhysicalRegion pr = runtime->map_region(context, il);
-
-    pr.wait_until_valid();
-
-    auto ac = 
-      pr.get_field_accessor(fid_t.fid_entity).typeify<entity_id>();
-
-    IndexIterator itr(runtime, context, is);
-    ptr_t ptr = itr.next();
-
-    for(size_t c = 0; c < cells.size(); ++c){
-      ac.write(ptr, c);
-      ++ptr;
-    }
-
-    cells_part.exclusive_ip = 
-      runtime->create_index_partition(context, is, coloring, true);
-
-    cells_part.shared_ip = 
-      runtime->create_index_partition(context, is, shared_coloring, true);
-
-    cells_part.ghost_ip = 
-      runtime->create_index_partition(context, is, ghost_coloring, false);
-
-    runtime->unmap_region(context, pr);
   }
+
+  for(size_t c = 0; c < cells_primary.size(); ++c){
+    size_t p = cells_exclusive[c];
+    if(p < NUM_PARTITIONS){
+      exclusive_coloring[p].points.insert(ptr_map[c]);
+    }
+
+    p = cells_shared[c];
+    if(p < NUM_PARTITIONS){
+      shared_coloring[p].points.insert(ptr_map[c]);
+    }
+
+    p = cells_ghost[c];
+    if(p < NUM_PARTITIONS){
+      ghost_coloring[p].points.insert(ptr_map[c]);
+    }
+  }
+
+  FieldSpace fs = h.create_field_space();
+
+  FieldAllocator fa = h.create_field_allocator(fs);
+
+  fa.allocate_field(sizeof(entity_id), fid_t.fid_entity);
+  
+  cells_part.entities_lr = h.create_logical_region(is, fs);
+
+  RegionRequirement rr(cells_part.entities_lr, WRITE_DISCARD, 
+    EXCLUSIVE, cells_part.entities_lr);
+  
+  rr.add_field(fid_t.fid_entity);
+  InlineLauncher il(rr);
+
+  PhysicalRegion pr = runtime->map_region(context, il);
+
+  pr.wait_until_valid();
+
+  auto ac = 
+    pr.get_field_accessor(fid_t.fid_entity).typeify<entity_id>();
+
+  IndexIterator itr(runtime, context, is);
+
+  for(size_t c = 0; c < cells_primary.size(); ++c){
+    ac.write(ptr_map[c], c);
+  }
+
+  cells_part.primary_ip = 
+    runtime->create_index_partition(context, is, primary_coloring, true);
+
+  cells_part.exclusive_ip = 
+    runtime->create_index_partition(context, is, exclusive_coloring, true);
+
+  cells_part.shared_ip = 
+    runtime->create_index_partition(context, is, shared_coloring, true);
+
+  cells_part.ghost_ip = 
+    runtime->create_index_partition(context, is, ghost_coloring, true);
+
+  runtime->unmap_region(context, pr);
 
   data_client dc;
 
