@@ -115,7 +115,7 @@ specialization_driver(
       cells_shared[c + 1] = p + 1;
       ++cells_part.shared_count_map[p + 1];
     }
-    else{
+    else if(c == 0 || c % partition_size != 0){
       cells_exclusive[c] = p;
     }
   }
@@ -123,6 +123,13 @@ specialization_driver(
   map<size_t, ptr_t> primary_ptr_map;
 
   map<size_t, ptr_t> ptr_map;
+
+  map<size_t, size_t> primary_offset_map;
+  map<size_t, size_t> ghost_offset_map;
+
+  map<size_t, size_t> exclusive_id_map;
+  map<size_t, size_t> shared_id_map;
+  map<size_t, size_t> ghost_id_map;
 
   Coloring primary_coloring;
   Coloring exclusive_coloring;
@@ -133,27 +140,30 @@ specialization_driver(
 
   IndexSpace is = h.create_index_space(cells_part.size);
 
+  map<size_t, ptr_t> primary_start_ptr_map;
+
   {
         
-    for(size_t c = 0; c < cells_primary.size(); ++c){
-      size_t p = cells_primary[c];
-      assert(p < NUM_PARTITIONS);
-      ++cells_part.primary_count_map[p];
-
-      p = cells_exclusive[c];
+    for(size_t c = 0; c < NUM_CELLS; ++c){
+      size_t p = cells_exclusive[c];
       if(p < NUM_PARTITIONS){
         ++cells_part.exclusive_count_map[p];
+        exclusive_id_map[c] = primary_offset_map[p] + ghost_count_map[p];
       }
 
       p = cells_shared[c];
       if(p < NUM_PARTITIONS){
         ++cells_part.shared_count_map[p];
+        shared_id_map[c] = primary_offset_map[p] + ghost_count_map[p];
       }
 
       p = cells_ghost[c];
       if(p < NUM_PARTITIONS){
         ++cells_part.ghost_count_map[p];
+        ghost_id_map[c] = ghost_offset_map[p]++;
       }
+
+      primary_offset_map[cells_primary[c]]++;
     }
 
     IndexAllocator ia = runtime->create_index_allocator(context, is);
@@ -161,11 +171,13 @@ specialization_driver(
     for(auto& itr : cells_part.primary_count_map){
       size_t p = itr.first;
       int count = itr.second;
-      ptr_t start = ia.alloc(count);
+      ptr_t start = ia.alloc(count + ghost_count_map[p]);
       primary_ptr_map[p] = start;
     }
 
-    for(size_t c = 0; c < cells_primary.size(); ++c){
+    primary_start_ptr_map = primary_ptr_map;
+
+    for(size_t c = 0; c < NUM_CELLS; ++c){
       size_t p = cells_primary[c];
       auto itr = primary_ptr_map.find(p);
       assert(itr != primary_ptr_map.end());
@@ -174,7 +186,7 @@ specialization_driver(
     }
   }
 
-  for(size_t c = 0; c < cells_primary.size(); ++c){
+  for(size_t c = 0; c < NUM_CELLS; ++c){
     size_t p = cells_exclusive[c];
     if(p < NUM_PARTITIONS){
       exclusive_coloring[p].points.insert(ptr_map[c]);
@@ -196,6 +208,9 @@ specialization_driver(
   FieldAllocator fa = h.create_field_allocator(fs);
 
   fa.allocate_field(sizeof(entity_id), fid_t.fid_entity);
+  fa.allocate_field(sizeof(entity_id), fid_t.fid_local_exclusive_id);
+  fa.allocate_field(sizeof(entity_id), fid_t.fid_local_shared_id);
+  fa.allocate_field(sizeof(entity_id), fid_t.fid_local_ghost_id);
   
   cells_part.entities_lr = h.create_logical_region(is, fs);
 
@@ -203,6 +218,9 @@ specialization_driver(
     EXCLUSIVE, cells_part.entities_lr);
   
   rr.add_field(fid_t.fid_entity);
+  rr.add_field(fid_t.fid_local_exclusive_id);
+  rr.add_field(fid_t.fid_local_shared_id);
+  rr.add_field(fid_t.fid_local_ghost_id);
   InlineLauncher il(rr);
 
   PhysicalRegion pr = runtime->map_region(context, il);
@@ -212,10 +230,48 @@ specialization_driver(
   auto ac = 
     pr.get_field_accessor(fid_t.fid_entity).typeify<entity_id>();
 
+  auto ac_exclusive = 
+    pr.get_field_accessor(fid_t.fid_local_exclusive_id).typeify<entity_id>();
+
+  auto ac_shared = 
+    pr.get_field_accessor(fid_t.fid_local_shared_id).typeify<entity_id>();
+
+  auto ac_ghost = 
+    pr.get_field_accessor(fid_t.fid_local_ghost_id).typeify<entity_id>();
+
   IndexIterator itr(runtime, context, is);
 
-  for(size_t c = 0; c < cells_primary.size(); ++c){
+  map<size_t, size_t> exclusive_offsets;
+  map<size_t, size_t> shared_offsets;
+  map<size_t, size_t> ghost_offsets;
+
+  for(size_t c = 0; c < NUM_CELLS; ++c){
     ac.write(ptr_map[c], c);
+
+    size_t p = cells_exclusive[c];
+    if(p < NUM_PARTITIONS){
+      ptr_t start = primary_start_ptr_map[p];
+      int offset = exclusive_offsets[p]++;
+      ac_exclusive.write(start + offset, exclusive_id_map[c]);
+    }
+
+    p = cells_shared[c];
+    if(p < NUM_PARTITIONS){
+      ptr_t start = primary_start_ptr_map[p];
+      int offset = shared_offsets[p]++;
+      ac_shared.write(start + offset, shared_id_map[c]);
+    }
+
+    p = cells_ghost[c];
+    if(p < NUM_PARTITIONS){
+      ptr_t start = primary_start_ptr_map[p];
+      int offset = ghost_offsets[p]++;
+      ac_ghost.write(start + offset, ghost_id_map[c]);
+      np(p);
+      np(offset);
+      np(ghost_id_map[c]);
+    }
+
   }
 
   cells_part.primary_ip = 

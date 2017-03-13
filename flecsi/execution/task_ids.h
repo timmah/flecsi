@@ -113,6 +113,9 @@ class field_ids_t
   size_t fid_data  = unique_fid_t::instance().next();
   size_t fid_ptr_t = unique_fid_t::instance().next();
   size_t fid_entity = unique_fid_t::instance().next();
+  size_t fid_local_exclusive_id = unique_fid_t::instance().next();
+  size_t fid_local_shared_id = unique_fid_t::instance().next();
+  size_t fid_local_ghost_id = unique_fid_t::instance().next();
   size_t fid_ptr_count = unique_fid_t::instance().next();
   size_t fid_offset_count = unique_fid_t::instance().next();
   size_t fid_index = unique_fid_t::instance().next();
