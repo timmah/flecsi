@@ -148,13 +148,15 @@ specialization_driver(
       size_t p = cells_exclusive[c];
       if(p < NUM_PARTITIONS){
         ++cells_part.exclusive_count_map[p];
-        exclusive_id_map[c] = primary_offset_map[p] + ghost_count_map[p];
+        exclusive_id_map[c] = 
+          primary_offset_map[p] + cells_part.ghost_count_map[p];
       }
 
       p = cells_shared[c];
       if(p < NUM_PARTITIONS){
         ++cells_part.shared_count_map[p];
-        shared_id_map[c] = primary_offset_map[p] + ghost_count_map[p];
+        shared_id_map[c] = 
+          primary_offset_map[p] + cells_part.ghost_count_map[p];
       }
 
       p = cells_ghost[c];
@@ -171,7 +173,7 @@ specialization_driver(
     for(auto& itr : cells_part.primary_count_map){
       size_t p = itr.first;
       int count = itr.second;
-      ptr_t start = ia.alloc(count + ghost_count_map[p]);
+      ptr_t start = ia.alloc(count + cells_part.ghost_count_map[p]);
       primary_ptr_map[p] = start;
     }
 
