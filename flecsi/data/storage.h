@@ -8,6 +8,7 @@
 
 #include "flecsi/utils/const_string.h"
 #include "flecsi/data/data_client.h"
+#include "flecsi/data/data_handle.h"
 
 ///
 /// \file
@@ -313,18 +314,17 @@ struct storage__ : public storage_policy_t<user_meta_data_t> {
     size_t ST,
     typename T,
     size_t NS,
-    size_t EP,
-    size_t SP,
-    size_t GP
+    size_t PS,
+    size_t PT
   >
   decltype(auto)
   get_handle(
     const data_client_t & data_client,
     const utils::const_string_t & key,
-    size_t version=0
+    size_t version = 0
   )
   {
-    return st_t<ST>::template get_handle<T, NS, EP, SP, GP>(data_client,
+    return st_t<ST>::template get_handle<T, NS, PS, PT>(data_client,
       sp_t::data_store_, key, version);
   } // get_accessor
 

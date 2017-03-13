@@ -231,7 +231,7 @@ specialization_driver(
   }
 
   auto h1 = 
-    flecsi_get_handle(dc, hydro, pressure, double, dense, 0, rw, rw, ro);
+    flecsi_get_handle(dc, hydro, pressure, double, dense, 0, pr, rw);
 
   flecsi_execute_task(task1, loc, single, h1);
 

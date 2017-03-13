@@ -29,6 +29,13 @@ namespace flecsi {
       ro =   0b01
     };
 
+    enum class partition_type : size_t {
+      pr,
+      ex,
+      sh,
+      gh
+    };
+
   } // namespace data
 
 ///
@@ -43,9 +50,8 @@ struct data_handle_base
 
 template<
   typename T,
-  size_t EP,
-  size_t SP,
-  size_t GP,
+  size_t PS,
+  size_t PT,
   typename P
 >
 struct data_handle__ : public data_handle_base, public P
@@ -55,11 +61,10 @@ struct data_handle__ : public data_handle_base, public P
 
 template<
   typename T,
-  size_t EP,
-  size_t SP,
-  size_t GP
+  size_t PS,
+  size_t PT
 >
-using data_handle_t = data_handle__<T, EP, SP, GP, flecsi_handle_policy_t>;
+using data_handle_t = data_handle__<T, PS, PT, flecsi_handle_policy_t>;
 
 } // namespace flecsi
 

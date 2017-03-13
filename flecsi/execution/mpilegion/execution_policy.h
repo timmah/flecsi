@@ -46,15 +46,15 @@ namespace execution {
       return handle_task_args__<I - 1, T, L>::walk(t, l, region);
     }
 
-    template<typename S, size_t EP, size_t SP, size_t GP>
-    static void handle_(flecsi::data_handle_t<S, EP, SP, GP>& h,
+    template<typename S, size_t PS, size_t PT>
+    static void handle_(flecsi::data_handle_t<S, PS, PT>& h,
                         L& l,
                         size_t& region){
 
       flecsi::execution::field_ids_t & fid_t = 
         flecsi::execution::field_ids_t::instance();
 
-      switch(EP){
+      switch(PS){
         case size_t(data::privilege::none):
           assert(false && 
                  "no privileges found on task arg while generating "
@@ -104,9 +104,9 @@ namespace execution {
       return handle_task_args__<I - 1, T, L>::walk(t, l, region);
     }
 
-    template<typename S, size_t EP, size_t SP, size_t GP>
+    template<typename S, size_t PS, size_t PT>
     static void handle_(Legion::Runtime* runtime, Legion::Context ctx,
-                        flecsi::data_handle_t<S, EP, SP, GP>& h,
+                        flecsi::data_handle_t<S, PS, PT>& h,
                         L& l,
                         size_t& region){
 
@@ -118,7 +118,7 @@ namespace execution {
       LogicalPartition lp =
         runtime->get_logical_partition(ctx, h.lr, h.exclusive_ip);
 
-      switch(EP){
+      switch(PS){
         case size_t(data::privilege::none):
           assert(false && 
                  "no privileges found on task arg while generating "
