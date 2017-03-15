@@ -50,12 +50,6 @@ TEST(halo_exchange, send_receive) {
     g2l[cell.id] = idx++;
   }
 
-  if (rank == 1) {
-    for (auto cell : ghost_cells) {
-      std::cout << "ghost cell id: " << cell.id << ", from rank: "
-                << cell.rank << ", offset: " << cell.offset << std::endl;
-    }
-  }
   std::vector<size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
   // initialize local_buffer with ids of primary cells (exclusive + shared).
   std::copy(primary_cells.begin(), primary_cells.end(), local_buffer.begin());
@@ -180,7 +174,7 @@ TEST(halo_exchange, scatter_gather) {
   ASSERT_EQ(all_cells, closure);
 }
 
-TEST(halo_exchange, one_sided_get) {
+TEST(halo_exchange, one_sided_get_passive) {
 //test() {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -200,15 +194,10 @@ TEST(halo_exchange, one_sided_get) {
   //     [primary cells ordered by mesh id][ghost cells ordered by mesh id]
   // one other possibility:
   //     [ghost cells from lower rank peers][primary cells][ghost cells from higher rank peers]
-  std::map <size_t, size_t> g2l;
-  size_t idx = 0;
-
-  for (const auto &cell : primary_cells) {
-    g2l[cell] = idx++;
-  }
-  for (const auto &cell : ghost_cells) {
-    g2l[cell.id] = idx++;
-  }
+  // It turns out that the current layout is very convenient for MPI_Get. The way
+  // ghost_cell.offset is calculated is correct to be used as target_disp to fetch
+  // data from the remote data buffer (because both of them are order by their global
+  // mesh id).
 
   std::vector <size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
   // initialize local_buffer with ids of primary cells (exclusive + shared).
@@ -224,13 +213,94 @@ TEST(halo_exchange, one_sided_get) {
                  &win);
 
   // 2. iterate through each ghost cell and MPI_Get from the peer.
-  MPI_Win_fence(0, win);
-  idx = primary_cells.size();
+  //MPI_Win_fence(0, win);
+  size_t idx = primary_cells.size();
+  for (auto& cell : ghost_cells) {
+    MPI_Win_lock(MPI_LOCK_EXCLUSIVE, cell.rank, 0, win);
+    MPI_Get(&local_buffer[idx++], 1, MPI_UNSIGNED_LONG_LONG,
+            cell.rank, cell.offset, 1, MPI_UNSIGNED_LONG_LONG, win);
+    MPI_Win_unlock(cell.rank, win);
+  }
+  //MPI_Win_fence(0, win);
+
+  MPI_Win_free(&win);
+
+  auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, primary_cells);
+  auto all_cells = std::set<size_t>(local_buffer.begin(), local_buffer.end());
+  ASSERT_EQ(all_cells, closure);
+}
+
+TEST(halo_exchange, pscw) {
+//test() {
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  flecsi::io::simple_definition_t sd("simple2d-8x8.msh");
+  flecsi::dmp::weaver weaver(sd);
+
+  using entry_info_t = flecsi::dmp::entry_info_t;
+
+  std::set <size_t> primary_cells = weaver.get_primary_cells();
+
+  std::set <entry_info_t> exclusive_cells = weaver.get_exclusive_cells();
+  std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
+  std::set <entry_info_t> ghost_cells = weaver.get_ghost_cells();
+
+  // Current layout of local_buffer:
+  //     [primary cells ordered by mesh id][ghost cells ordered by mesh id]
+  // one other possibility:
+  //     [ghost cells from lower rank peers][primary cells][ghost cells from higher rank peers]
+  // It turns out that the current layout is very convenient for MPI_Get. The way
+  // ghost_cell.offset is calculated is correct to be used as target_disp to fetch
+  // data from the remote data buffer (because both of them are order by their global
+  // mesh id).
+
+  std::vector <size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
+  // initialize local_buffer with ids of primary cells (exclusive + shared).
+  // leave the ghost cell part un-initialized.
+  std::copy(primary_cells.begin(), primary_cells.end(), local_buffer.begin());
+
+  // Find the peers to form a MPI group. We need both peers that need our shared
+  // cells and the peers that provides out ghost cells.
+  std::set<int> rank_set;
+  for (auto cell : shared_cells) {
+    for (auto peer : cell.shared) {
+      rank_set.insert(peer);
+    }
+  }
+  for (auto cell : ghost_cells) {
+    rank_set.insert(cell.rank);
+  }
+
+  std::vector<int> ranks(rank_set.begin(), rank_set.end());
+  MPI_Group comm_grp, rma_group;
+  MPI_Comm_group(MPI_COMM_WORLD, &comm_grp);
+  MPI_Group_incl(comm_grp, ranks.size(), ranks.data(), &rma_group);
+  MPI_Group_free(&comm_grp);
+
+  // A pull model using MPI_Get:
+  // 1. create MPI window for primary cell portion of the local buffer, some of
+  // them are shared cells that can be fetch by peer as ghost cells.
+  MPI_Win win;
+  MPI_Win_create(local_buffer.data(), primary_cells.size() * sizeof(size_t),
+                 sizeof(size_t), MPI_INFO_NULL, MPI_COMM_WORLD,
+                 &win);
+
+  // 2. iterate through each ghost cell and MPI_Get from the peer.
+  MPI_Win_post(rma_group, 0, win);
+  MPI_Win_start(rma_group, 0, win);
+
+  size_t idx = primary_cells.size();
   for (auto& cell : ghost_cells) {
     MPI_Get(&local_buffer[idx++], 1, MPI_UNSIGNED_LONG_LONG,
             cell.rank, cell.offset, 1, MPI_UNSIGNED_LONG_LONG, win);
   }
-  MPI_Win_fence(0, win);
+
+  MPI_Win_complete(win);
+  MPI_Win_wait(win);
+
+  MPI_Group_free(&rma_group);
+  MPI_Win_free(&win);
 
   auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, primary_cells);
   auto all_cells = std::set<size_t>(local_buffer.begin(), local_buffer.end());
