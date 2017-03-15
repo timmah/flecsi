@@ -50,6 +50,12 @@ TEST(halo_exchange, send_receive) {
     g2l[cell.id] = idx++;
   }
 
+  if (rank == 1) {
+    for (auto cell : ghost_cells) {
+      std::cout << "ghost cell id: " << cell.id << ", from rank: "
+                << cell.rank << ", offset: " << cell.offset << std::endl;
+    }
+  }
   std::vector<size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
   // initialize local_buffer with ids of primary cells (exclusive + shared).
   std::copy(primary_cells.begin(), primary_cells.end(), local_buffer.begin());
@@ -172,4 +178,62 @@ TEST(halo_exchange, scatter_gather) {
   auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, primary_cells);
   auto all_cells = std::set<size_t>(local_buffer.begin(), local_buffer.end());
   ASSERT_EQ(all_cells, closure);
+}
+
+TEST(halo_exchange, one_sided_get) {
+//test() {
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  flecsi::io::simple_definition_t sd("simple2d-8x8.msh");
+  flecsi::dmp::weaver weaver(sd);
+
+  using entry_info_t = flecsi::dmp::entry_info_t;
+
+  std::set <size_t> primary_cells = weaver.get_primary_cells();
+
+  std::set <entry_info_t> exclusive_cells = weaver.get_exclusive_cells();
+  std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
+  std::set <entry_info_t> ghost_cells = weaver.get_ghost_cells();
+
+  // Current layout of local_buffer:
+  //     [primary cells ordered by mesh id][ghost cells ordered by mesh id]
+  // one other possibility:
+  //     [ghost cells from lower rank peers][primary cells][ghost cells from higher rank peers]
+  std::map <size_t, size_t> g2l;
+  size_t idx = 0;
+
+  for (const auto &cell : primary_cells) {
+    g2l[cell] = idx++;
+  }
+  for (const auto &cell : ghost_cells) {
+    g2l[cell.id] = idx++;
+  }
+
+  std::vector <size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
+  // initialize local_buffer with ids of primary cells (exclusive + shared).
+  // leave the ghost cell part un-initialized.
+  std::copy(primary_cells.begin(), primary_cells.end(), local_buffer.begin());
+
+  // A pull model using MPI_Get:
+  // 1. create MPI window for primary cell portion of the local buffer, some of
+  // them are shared cells that can be fetch by peer as ghost cells.
+  MPI_Win win;
+  MPI_Win_create(local_buffer.data(), primary_cells.size() * sizeof(size_t),
+                 sizeof(size_t), MPI_INFO_NULL, MPI_COMM_WORLD,
+                 &win);
+
+  // 2. iterate through each ghost cell and MPI_Get from the peer.
+  MPI_Win_fence(0, win);
+  idx = primary_cells.size();
+  for (auto& cell : ghost_cells) {
+    MPI_Get(&local_buffer[idx++], 1, MPI_UNSIGNED_LONG_LONG,
+            cell.rank, cell.offset, 1, MPI_UNSIGNED_LONG_LONG, win);
+  }
+  MPI_Win_fence(0, win);
+
+  auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, primary_cells);
+  auto all_cells = std::set<size_t>(local_buffer.begin(), local_buffer.end());
+  ASSERT_EQ(all_cells, closure);
+
 }
