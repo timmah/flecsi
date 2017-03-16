@@ -16,55 +16,46 @@
 #include <cinchtest.h>
 #include <numeric>
 #include <mpi.h>
+#include <string>
 
 #include "flecsi/partition/weaver.h"
 #include "flecsi/topology/index_space.h"
+#include "flecsi/execution/execution.h"
+#include "flecsi/data/data.h"
+
+#include "simple_distributed_mesh.h"
 
 TEST(halo_exchange, send_receive) {
 //test() {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  flecsi::io::simple_definition_t sd("simple2d-8x8.msh");
-  flecsi::dmp::weaver weaver(sd);
-
-  using entry_info_t = flecsi::dmp::entry_info_t;
-
-  std::set <size_t> primary_cells = weaver.get_primary_cells();
-
-  std::set <entry_info_t> exclusive_cells = weaver.get_exclusive_cells();
-  std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
-  std::set <entry_info_t> ghost_cells = weaver.get_ghost_cells();
+  simple_distributed_mesh_t mesh("simple2d-8x8.msh");
 
   // Current layout of local_buffer:
   //     [primary cells ordered by mesh id][ghost cells ordered by mesh id]
   // one other possibility:
   //     [ghost cells from lower rank peers][primary cells][ghost cells from higher rank peers]
-  std::map<size_t, size_t> g2l;
-  size_t idx = 0;
-
-  for (const auto& cell : primary_cells) {
-    g2l[cell] = idx++;
+  flecsi_register_data(mesh, halo, cell_gid, size_t, dense, 1, cells);
+  auto acc = flecsi_get_accessor(mesh, halo, cell_gid, size_t, dense, 0);
+  for (size_t local_cell_id = 0; local_cell_id < mesh.num_primary_cells(); local_cell_id++) {
+    acc[local_cell_id] = mesh.global_cell_id(local_cell_id);
   }
-  for (const auto& cell : ghost_cells) {
-    g2l[cell.id] = idx++;
+  for (size_t local_cell_id = mesh.num_primary_cells(); local_cell_id < mesh.indices(cells); local_cell_id++) {
+    acc[local_cell_id] = -1;
   }
-
-  std::vector<size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
-  // initialize local_buffer with ids of primary cells (exclusive + shared).
-  std::copy(primary_cells.begin(), primary_cells.end(), local_buffer.begin());
 
   std::vector <MPI_Request> requests;
-  for (const auto& cell : ghost_cells) {
+  for (const auto& cell : mesh.get_ghost_cells_info()) {
     requests.push_back({});
-    MPI_Irecv(&local_buffer[g2l[cell.id]], 1, MPI_UNSIGNED_LONG_LONG,
+    MPI_Irecv(&acc[mesh.local_cell_id(cell.id)], 1, MPI_UNSIGNED_LONG_LONG,
               cell.rank, 0, MPI_COMM_WORLD,
               &requests[requests.size() - 1]);
   }
 
-  for (const auto& cell : shared_cells) {
+  for (const auto& cell : mesh.get_shared_cells_info()) {
     for (const auto& dest: cell.shared) {
-      MPI_Send(&local_buffer[g2l[cell.id]], 1, MPI_UNSIGNED_LONG_LONG,
+      MPI_Send(&acc[mesh.local_cell_id(cell.id)], 1, MPI_UNSIGNED_LONG_LONG,
                dest, 0, MPI_COMM_WORLD);
     }
   }
@@ -72,8 +63,16 @@ TEST(halo_exchange, send_receive) {
   std::vector<MPI_Status> status(requests.size());
   MPI_Waitall(requests.size(), &requests[0], &status[0]);
 
-  auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, primary_cells);
-  auto all_cells = std::set<size_t>(local_buffer.begin(), local_buffer.end());
+  std::set<size_t> closure;
+  for (size_t i = 0; i < mesh.indices(cells); i++) {
+    closure.insert(mesh.global_cell_id(i));
+  }
+
+  std::set<size_t> all_cells;
+  for (size_t i = 0; i < mesh.indices(cells); i++) {
+    all_cells.insert(acc[i]);
+  }
+
   ASSERT_EQ(all_cells, closure);
 }
 
@@ -179,16 +178,7 @@ TEST(halo_exchange, one_sided_get_passive) {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  flecsi::io::simple_definition_t sd("simple2d-8x8.msh");
-  flecsi::dmp::weaver weaver(sd);
-
-  using entry_info_t = flecsi::dmp::entry_info_t;
-
-  std::set <size_t> primary_cells = weaver.get_primary_cells();
-
-  std::set <entry_info_t> exclusive_cells = weaver.get_exclusive_cells();
-  std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
-  std::set <entry_info_t> ghost_cells = weaver.get_ghost_cells();
+  simple_distributed_mesh_t mesh("simple2d-8x8.msh");
 
   // Current layout of local_buffer:
   //     [primary cells ordered by mesh id][ghost cells ordered by mesh id]
@@ -198,36 +188,45 @@ TEST(halo_exchange, one_sided_get_passive) {
   // ghost_cell.offset is calculated is correct to be used as target_disp to fetch
   // data from the remote data buffer (because both of them are order by their global
   // mesh id).
-
-  std::vector <size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
-  // initialize local_buffer with ids of primary cells (exclusive + shared).
-  // leave the ghost cell part un-initialized.
-  std::copy(primary_cells.begin(), primary_cells.end(), local_buffer.begin());
+  flecsi_register_data(mesh, halo, cell_gid, size_t, dense, 1, cells);
+  auto acc = flecsi_get_accessor(mesh, halo, cell_gid, size_t, dense, 0);
+  for (size_t local_cell_id = 0; local_cell_id < mesh.num_primary_cells(); local_cell_id++) {
+    acc[local_cell_id] = mesh.global_cell_id(local_cell_id);
+  }
+  for (size_t local_cell_id = mesh.num_primary_cells(); local_cell_id < mesh.indices(cells); local_cell_id++) {
+    acc[local_cell_id] = -1;
+  }
 
   // A pull model using MPI_Get:
   // 1. create MPI window for primary cell portion of the local buffer, some of
   // them are shared cells that can be fetch by peer as ghost cells.
   MPI_Win win;
-  MPI_Win_create(local_buffer.data(), primary_cells.size() * sizeof(size_t),
+  MPI_Win_create(&acc[0], mesh.indices(cells) * sizeof(size_t),
                  sizeof(size_t), MPI_INFO_NULL, MPI_COMM_WORLD,
                  &win);
 
   // 2. iterate through each ghost cell and MPI_Get from the peer.
-  //MPI_Win_fence(0, win);
-  size_t idx = primary_cells.size();
-  for (auto& cell : ghost_cells) {
-    MPI_Win_lock(MPI_LOCK_EXCLUSIVE, cell.rank, 0, win);
-    MPI_Get(&local_buffer[idx++], 1, MPI_UNSIGNED_LONG_LONG,
+  for (auto& cell : mesh.get_ghost_cells_info()) {
+    MPI_Win_lock(MPI_LOCK_SHARED, cell.rank, 0, win);
+    MPI_Get(&acc[mesh.local_cell_id(cell.id)], 1, MPI_UNSIGNED_LONG_LONG,
             cell.rank, cell.offset, 1, MPI_UNSIGNED_LONG_LONG, win);
     MPI_Win_unlock(cell.rank, win);
   }
-  //MPI_Win_fence(0, win);
 
   MPI_Win_free(&win);
 
-  auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, primary_cells);
-  auto all_cells = std::set<size_t>(local_buffer.begin(), local_buffer.end());
+  std::set<size_t> closure;
+  for (size_t i = 0; i < mesh.indices(cells); i++) {
+    closure.insert(mesh.global_cell_id(i));
+  }
+
+  std::set<size_t> all_cells;
+  for (size_t i = 0; i < mesh.indices(cells); i++) {
+    all_cells.insert(acc[i]);
+  }
+
   ASSERT_EQ(all_cells, closure);
+
 }
 
 TEST(halo_exchange, pscw) {
@@ -235,16 +234,7 @@ TEST(halo_exchange, pscw) {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  flecsi::io::simple_definition_t sd("simple2d-8x8.msh");
-  flecsi::dmp::weaver weaver(sd);
-
-  using entry_info_t = flecsi::dmp::entry_info_t;
-
-  std::set <size_t> primary_cells = weaver.get_primary_cells();
-
-  std::set <entry_info_t> exclusive_cells = weaver.get_exclusive_cells();
-  std::set <entry_info_t> shared_cells = weaver.get_shared_cells();
-  std::set <entry_info_t> ghost_cells = weaver.get_ghost_cells();
+  simple_distributed_mesh_t mesh("simple2d-8x8.msh");
 
   // Current layout of local_buffer:
   //     [primary cells ordered by mesh id][ghost cells ordered by mesh id]
@@ -254,25 +244,17 @@ TEST(halo_exchange, pscw) {
   // ghost_cell.offset is calculated is correct to be used as target_disp to fetch
   // data from the remote data buffer (because both of them are order by their global
   // mesh id).
-
-  std::vector <size_t> local_buffer(primary_cells.size() + ghost_cells.size(), -1);
-  // initialize local_buffer with ids of primary cells (exclusive + shared).
-  // leave the ghost cell part un-initialized.
-  std::copy(primary_cells.begin(), primary_cells.end(), local_buffer.begin());
-
-  // Find the peers to form a MPI group. We need both peers that need our shared
-  // cells and the peers that provides out ghost cells.
-  std::set<int> rank_set;
-  for (auto cell : shared_cells) {
-    for (auto peer : cell.shared) {
-      rank_set.insert(peer);
-    }
+  flecsi_register_data(mesh, halo, cell_gid, size_t, dense, 1, cells);
+  auto acc = flecsi_get_accessor(mesh, halo, cell_gid, size_t, dense, 0);
+  for (size_t local_cell_id = 0; local_cell_id < mesh.num_primary_cells(); local_cell_id++) {
+    acc[local_cell_id] = mesh.global_cell_id(local_cell_id);
   }
-  for (auto cell : ghost_cells) {
-    rank_set.insert(cell.rank);
+  for (size_t local_cell_id = mesh.num_primary_cells(); local_cell_id < mesh.indices(cells); local_cell_id++) {
+    acc[local_cell_id] = -1;
   }
 
-  std::vector<int> ranks(rank_set.begin(), rank_set.end());
+  auto ranks = mesh.get_shared_peers();
+
   MPI_Group comm_grp, rma_group;
   MPI_Comm_group(MPI_COMM_WORLD, &comm_grp);
   MPI_Group_incl(comm_grp, ranks.size(), ranks.data(), &rma_group);
@@ -282,17 +264,16 @@ TEST(halo_exchange, pscw) {
   // 1. create MPI window for primary cell portion of the local buffer, some of
   // them are shared cells that can be fetch by peer as ghost cells.
   MPI_Win win;
-  MPI_Win_create(local_buffer.data(), primary_cells.size() * sizeof(size_t),
+  MPI_Win_create(&acc[0], mesh.num_primary_cells() * sizeof(size_t),
                  sizeof(size_t), MPI_INFO_NULL, MPI_COMM_WORLD,
                  &win);
-
   // 2. iterate through each ghost cell and MPI_Get from the peer.
   MPI_Win_post(rma_group, 0, win);
   MPI_Win_start(rma_group, 0, win);
 
-  size_t idx = primary_cells.size();
-  for (auto& cell : ghost_cells) {
-    MPI_Get(&local_buffer[idx++], 1, MPI_UNSIGNED_LONG_LONG,
+  size_t idx = mesh.num_primary_cells();
+  for (auto& cell : mesh.get_ghost_cells_info()) {
+    MPI_Get(&acc[idx++], 1, MPI_UNSIGNED_LONG_LONG,
             cell.rank, cell.offset, 1, MPI_UNSIGNED_LONG_LONG, win);
   }
 
@@ -302,8 +283,16 @@ TEST(halo_exchange, pscw) {
   MPI_Group_free(&rma_group);
   MPI_Win_free(&win);
 
-  auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, primary_cells);
-  auto all_cells = std::set<size_t>(local_buffer.begin(), local_buffer.end());
+  std::set<size_t> closure;
+  for (size_t i = 0; i < mesh.indices(cells); i++) {
+    closure.insert(mesh.global_cell_id(i));
+  }
+
+  std::set<size_t> all_cells;
+  for (size_t i = 0; i < mesh.indices(cells); i++) {
+    all_cells.insert(acc[i]);
+  }
+
   ASSERT_EQ(all_cells, closure);
 
 }

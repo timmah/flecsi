@@ -134,11 +134,6 @@ void driver(int argc, char **argv) {
   std::set<entry_info_t> shared_cells = weaver.get_shared_cells();
   std::set<entry_info_t> ghost_cells  = weaver.get_ghost_cells();
 
-
-//  if (rank == 0)
-//    for (auto cell : ghost_cells) {
-//      std::cout << "ghost cell: " << cell.rank << std::endl;
-//    }
   // Thus we need to create a map that maps global cell ids provided by the graph
   // definition to indices of an array.
   // This should be encapsulate into the data accessor/handler.
@@ -162,11 +157,7 @@ void driver(int argc, char **argv) {
       g2l[cell.id] = idx++;
   }
 
-//  if (rank == 0)
-//    for (auto pair : g2l) {
-//      std::cout << "global id: " << pair.first << ", local index: " << pair.second << std::endl;
-//    }
-  mesh_t m(weaver);
+  simple_distributed_mesh_t m(weaver);
 
   flecsi_register_data(m, gof, alive, int, dense, 2, cells);
 
