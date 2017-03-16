@@ -52,6 +52,8 @@ public:
         neighbor_global_ids.push_back(neigbor);
         neighbor_local_ids.push_back(global_to_local_map[neigbor]);
       }
+      global_cell_to_cell_conn[cell] = std::move(neighbor_global_ids);
+      local_cell_to_cell_conn[global_to_local_map[cell]] = std::move(neighbor_local_ids);
     }
   }
 
@@ -69,7 +71,7 @@ public:
   // convert a local cell id into a global cell id
   size_t global_cell_id(size_t cell_local_id) {
     if (cell_local_id > local_to_global_map.size()) {
-      throw std::invalid_argument("invalid local cell id");
+      throw std::invalid_argument("invalid local cell id: " + std::to_string(cell_local_id));
     } else {
       return local_to_global_map[cell_local_id];
     }
@@ -79,7 +81,7 @@ public:
   size_t local_cell_id(size_t cell_global_id) {
     auto iter = global_to_local_map.find(cell_global_id);
     if (iter == global_to_local_map.end()) {
-      throw std::invalid_argument("invalid local cell id");
+      throw std::invalid_argument("invalid global cell id");
     } else {
       return iter->second;
     }
@@ -118,6 +120,13 @@ public:
   std::set <entry_info_t> get_shared_cells_info() const {
     return shared_cells;
   }
+  std::set <size_t> get_primary_cells() const {
+    return primary_cells;
+  }
+  std::vector<size_t> get_local_cell_neighbors(size_t local_id) {
+    return local_cell_to_cell_conn[local_id];
+  }
+
 private:
   flecsi::io::simple_definition_t sd;
   flecsi::dmp::weaver weaver;
