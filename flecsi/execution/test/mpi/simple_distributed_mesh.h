@@ -34,33 +34,22 @@ public:
   using vertex_t = simple_vertex_t;
 
   simple_distributed_mesh_t(const char* filename) : sd(filename), weaver(sd) {
-    primary_vertices = weaver.get_primary_vertices();
-    exclusive_vertices = weaver.get_exclusive_vertices();
-    shared_vertices = weaver.get_shared_vertices();
-    ghost_vertices = weaver.get_ghost_vertices();
-
+    // TODO: move this into a factory that takes a simple_definition and out put a
+    // a simple_distributed_mesh.
     std::vector<vertex_t *> vs;
     std::map<size_t, size_t> vertex_global_to_local_map;
     size_t index = 0;
-    for (auto vertex : primary_vertices) {
+    for (auto vertex : weaver.get_primary_vertices()) {
       // get the vertex coordinates from sd.
       vs.push_back(create_vertex(sd.vertex(vertex), vertex));
       vertex_global_to_local_map[vertex] = index++;
     }
-    for (auto vertex : ghost_vertices) {
+    for (auto vertex : weaver.get_ghost_vertices()) {
       vs.push_back(create_vertex(sd.vertex(vertex.id), vertex.id));
       vertex_global_to_local_map[vertex.id] = index++;
     }
 
-    // TODO: do we need global <-> local mapping for vertices?
-
-    primary_cells = weaver.get_primary_cells();
-    exclusive_cells = weaver.get_exclusive_cells();
-    shared_cells = weaver.get_shared_cells();
-    ghost_cells = weaver.get_ghost_cells();
-
-    // TODO: add ghost cells, add cell.type for primary and ghost.
-    for (auto cell : primary_cells) {
+    for (auto cell : weaver.get_primary_cells()) {
       auto vertices = sd.vertices(2, cell);
       create_cell({vs[vertex_global_to_local_map.at(vertices[0])],
                    vs[vertex_global_to_local_map.at(vertices[1])],
@@ -74,7 +63,7 @@ public:
     // on only way (is it) to do it with mesh_topology is by adding ghost
     // cells to the mesh as well. We also add two indice spaces, one for
     // primary and the other for ghost
-    for (auto cell : ghost_cells) {
+    for (auto cell : weaver.get_ghost_cells()) {
       auto vertices = sd.vertices(2, cell.id);
       create_cell({vs[vertex_global_to_local_map.at(vertices[0])],
                    vs[vertex_global_to_local_map.at(vertices[1])],
@@ -86,18 +75,19 @@ public:
 
     init();
 
-
+    // TODO: maybe we don't even need these any more.
     //size_t index = 0;
     index = 0;
-    for (const auto& cell : primary_cells) {
+    for (const auto& cell : weaver.get_primary_cells()) {
       global_to_local_map[cell] = index++;
       local_to_global_map.push_back(cell);
     }
-    for (const auto& cell : ghost_cells) {
+    for (const auto& cell : weaver.get_ghost_cells()) {
       global_to_local_map[cell.id] = index++;
       local_to_global_map.push_back(cell.id);
     }
   }
+
   void
   init()
   {
@@ -107,7 +97,7 @@ public:
     // Use a predicate function to create the interior cells
     // index space
     primary_cells_ =
-      base_t::entities<2, 0>().filter(is_primary);
+      base_t::entities<2, 0>().filter([](auto cell) {return cell->type == primary;});
 
     // Use a predicate function to create the domain boundary cells
     // index space
@@ -115,17 +105,6 @@ public:
       base_t::entities<2, 0>().filter([](auto cell) {return cell->type == ghost;});
   } // init
 
-  static bool
-  is_primary(simple_cell_t *cell)
-  {
-    return cell->type == primary;
-  }
-
-  static bool
-  is_ghost(simple_cell_t *cell)
-  {
-
-  }
   vertex_t *
   create_vertex(const flecsi::point<double, 2>& pos, size_t mesh_id)
   {
@@ -146,7 +125,7 @@ public:
   size_t indices(size_t index_space_id) const override {
     switch(index_space_id) {
       case simple_distributed_mesh_index_spaces_t::cells:
-        return primary_cells.size() + ghost_cells.size();
+        return primary_cells_.size() + ghost_cells_.size();
       default:
         // FIXME: lookup user-defined index space
         clog_fatal("unknown index space");
@@ -184,7 +163,7 @@ public:
     }
   }
 
-  // convert a global cell in into a global cell id
+  // convert a global cell in into a local cell id
   size_t local_cell_id(size_t cell_global_id) {
     auto iter = global_to_local_map.find(cell_global_id);
     if (iter == global_to_local_map.end()) {
@@ -196,24 +175,24 @@ public:
 
   // get number of primary cells
   size_t num_primary_cells() const {
-    return primary_cells.size();
+    return primary_cells_.size();
   }
 
   // get number of ghost cells
   size_t num_ghost_cells() const {
-    return ghost_cells.size();
+    return ghost_cells_.size();
   }
 
   // Find the peers to form a MPI group. We need both peers that need our shared
   // cells and the peers that provides us ghost cells.
   std::vector<int> get_shared_peers() const {
     std::set<int> rank_set;
-    for (auto cell : shared_cells) {
+    for (auto cell : weaver.get_shared_cells()) {
       for (auto peer : cell.shared) {
         rank_set.insert(peer);
       }
     }
-    for (auto cell : ghost_cells) {
+    for (auto cell : weaver.get_ghost_cells()) {
       rank_set.insert(cell.rank);
     }
     std::vector<int> peers(rank_set.begin(), rank_set.end());
@@ -222,30 +201,19 @@ public:
 
   // FIXME: Do we really need to expose these information?
   std::set <entry_info_t> get_ghost_cells_info() const {
-    return ghost_cells;
+    return weaver.get_ghost_cells();
   }
   std::set <entry_info_t> get_shared_cells_info() const {
-    return shared_cells;
+    return weaver.get_shared_cells();
   }
   std::set <size_t> get_primary_cells() const {
-    return primary_cells;
+    return weaver.get_primary_cells();
   }
 
 private:
   // TODO: shoud we retain these two members?
   flecsi::io::simple_definition_t sd;
   flecsi::dmp::weaver weaver;
-
-  // TODO: there is paritions member in the data_client_t, how should be reuse it?
-  std::set <size_t> primary_cells;
-  std::set <entry_info_t> exclusive_cells;
-  std::set <entry_info_t> shared_cells;
-  std::set <entry_info_t> ghost_cells;
-
-  std::set <size_t> primary_vertices;
-  std::set <entry_info_t> exclusive_vertices;
-  std::set <entry_info_t> shared_vertices;
-  std::set <entry_info_t> ghost_vertices;
 
   std::map<size_t, size_t> global_to_local_map;
   std::vector<size_t> local_to_global_map;
