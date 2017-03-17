@@ -296,7 +296,8 @@ public:
   void
   add_entity(
     mesh_entity_base_t<MT::num_domains> * ent,
-    size_t partition_id=0
+    size_t partition_id=0,
+    size_t mesh_id=0
  )
   {
     using etype = entity_type<D, M>;
@@ -304,7 +305,9 @@ public:
 
     auto & is = ms_.index_spaces[M][D].template cast<dtype>();
 
-    id_t global_id = id_t::make<D, M>(is.size(), partition_id);
+    id_t global_id = id_t::make<D, M>(is.size(), partition_id,
+                                      0 /* flag */,
+                                      mesh_id);
 
     ent->template set_global_id<M>(global_id);
     is.push_back(dtype(static_cast<etype*>(ent)));

@@ -35,16 +35,11 @@ void stencil_task(simple_distributed_mesh_t &mesh,
                   accessor_t<int>& a0,
                   accessor_t<int>& a1)
 {
-  // TODO: iterate over some kind of index space
-  for (int cell = 0; cell < mesh.num_primary_cells(); cell++) {
-    //TODO: make 'neighbors' some kind of index space as well.
-    auto neighbors = mesh.get_local_cell_neighbors(cell);
-
+  for (auto cell : mesh.cells(primary)) {
     int count = 0;
-    for (auto neighbor : neighbors) {
-      if (a0(neighbor) == 1) {
+    for (auto neighbor : mesh.entities<2, 0>(cell)) {
+      if (a0(neighbor.id()) == 1)
         count++;
-      }
     }
 
     if (a0(cell)) {
@@ -88,7 +83,7 @@ void halo_exchange_task(simple_distributed_mesh_t &mesh,
   // TODO: still exposes ghost_cell_info.
   size_t idx = mesh.num_primary_cells();
   for (auto& cell : mesh.get_ghost_cells_info()) {
-    auto local_id = mesh.local_cell_id(cell.id)
+    auto local_id = mesh.local_cell_id(cell.id);
     MPI_Get(&acc[local_id], 1, MPI_INT,
             cell.rank, cell.offset, 1, MPI_INT, win);
   }
