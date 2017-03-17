@@ -81,7 +81,6 @@ void halo_exchange_task(simple_distributed_mesh_t &mesh,
   MPI_Win_start(rma_group, 0, win);
 
   // TODO: still exposes ghost_cell_info.
-  size_t idx = mesh.num_primary_cells();
   for (auto& cell : mesh.get_ghost_cells_info()) {
     auto local_id = mesh.local_cell_id(cell.id);
     MPI_Get(&acc[local_id], 1, MPI_INT,
@@ -109,10 +108,9 @@ void driver(int argc, char **argv) {
   auto acc0 = flecsi_get_accessor(mesh, gof, alive, int, dense, 0);
   auto acc1 = flecsi_get_accessor(mesh, gof, alive, int, dense, 1);
 
-  // populate data storage.
-  // TODO: change to mesh.cells(primary)
-  for (size_t id = 0; id < mesh.indices(cells); id++) {
-    acc0[id] = acc0[id] = 0;
+  // populate data storage for both primary and ghost cells
+  for (auto cell : mesh.cells()) {
+    acc0[cell.id()] = acc0[cell.id()] = 0;
   }
 
   // initialize the center 3 cells to be alive (a row), it is a period 2 blinker
@@ -132,14 +130,6 @@ void driver(int argc, char **argv) {
   if (primary_cells.count(43) != 0) {
     auto local_id = mesh.local_cell_id(43);
     acc0(local_id) = acc1(local_id) = 1;
-  }
-
-  // add entries for ghost cells
-  // TODO: add mesh::get_ghost_cells() -> index_space (in global or local?) of ghost cells.
-  // or something like mesh::cells(ghost_cell).
-  for (auto ghost : mesh.get_ghost_cells_info()) {
-    auto local_id = mesh.local_cell_id(ghost.id);
-    acc0(local_id) = acc1(local_id) = 0;
   }
 
   for (int i = 0; i < 5; i++) {

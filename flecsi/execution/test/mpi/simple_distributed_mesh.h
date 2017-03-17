@@ -70,6 +70,10 @@ public:
                   cell);
     }
 
+    // We do need cell to cell connectivity between primary and ghost cells
+    // on only way (is it) to do it with mesh_topology is by adding ghost
+    // cells to the mesh as well. We also add two indice spaces, one for
+    // primary and the other for ghost
     for (auto cell : ghost_cells) {
       auto vertices = sd.vertices(2, cell.id);
       create_cell({vs[vertex_global_to_local_map.at(vertices[0])],
@@ -92,25 +96,6 @@ public:
     for (const auto& cell : ghost_cells) {
       global_to_local_map[cell.id] = index++;
       local_to_global_map.push_back(cell.id);
-    }
-
-    // TODO: I don't think that we need cell to cell connectivity for ghost cell
-    // but I may be wrong.
-    // TODO: properly inherit from mesh_topology_t and deal with connectivity
-    // correctly.
-    for (const auto& cell : primary_cells) {
-      std::set <size_t> me{cell};
-      auto closure = flecsi::topology::entity_closure<2, 2, 0>(sd, me);
-      auto nearest_neighbors = flecsi::utils::set_difference(closure, me);
-
-      std::vector<size_t> neighbor_global_ids;
-      std::vector<size_t> neighbor_local_ids;
-      for (auto neigbor : nearest_neighbors) {
-        neighbor_global_ids.push_back(neigbor);
-        neighbor_local_ids.push_back(global_to_local_map[neigbor]);
-      }
-      global_cell_to_cell_conn[cell] = std::move(neighbor_global_ids);
-      local_cell_to_cell_conn[global_to_local_map[cell]] = std::move(neighbor_local_ids);
     }
   }
   void
@@ -168,6 +153,12 @@ public:
         return 0;
     } // switch
   }
+
+  auto
+  cells()
+  {
+    return base_t::entities<2, 0>();
+  } // cells
 
   auto
   cells(
@@ -239,9 +230,6 @@ public:
   std::set <size_t> get_primary_cells() const {
     return primary_cells;
   }
-  std::vector<size_t> get_local_cell_neighbors(size_t local_id) {
-    return local_cell_to_cell_conn[local_id];
-  }
 
 private:
   // TODO: shoud we retain these two members?
@@ -261,9 +249,6 @@ private:
 
   std::map<size_t, size_t> global_to_local_map;
   std::vector<size_t> local_to_global_map;
-
-  std::map<size_t, std::vector<size_t>> global_cell_to_cell_conn;
-  std::map<size_t, std::vector<size_t>> local_cell_to_cell_conn;
 
   flecsi::topology::index_space<
     flecsi::topology::domain_entity<0, simple_cell_t>, false, true, false> primary_cells_;
