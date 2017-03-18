@@ -77,6 +77,13 @@ void halo_exchange_task(simple_distributed_mesh_t &mesh,
                  &win);
 
   // 2. iterate through each ghost cell and MPI_Get from the peer.
+  // FIXME: the group for MPI_Win_post are the "origin" processes, i.e. the peer
+  // processes calling MPI_Get to get our shared cells. Thus granting access of
+  // local window to these processes. This is the set union of the entry_info.shared
+  // of shared cells.
+  // On the other hand, the group for MPI_Win_start are the 'target' processes, i.e. the 
+  // peer processes this rank is going to get ghost cells from. This is the union of
+  // entry_info.rank of ghost cells.
   MPI_Win_post(rma_group, 0, win);
   MPI_Win_start(rma_group, 0, win);
 
