@@ -80,7 +80,10 @@ void halo_exchange_task(simple_distributed_mesh_t &mesh,
   MPI_Win_post(rma_group, 0, win);
   MPI_Win_start(rma_group, 0, win);
 
-  // TODO: still exposes ghost_cell_info.
+  // TODO: still exposes ghost_cell_info. Move ghost_cell_info into simple_cell_t and chhange
+  // it to something like:
+  // for (auto cell : mesh.cells(ghost)) {
+  //   MPI_Get(&acc[cell.id], ...)
   for (auto& cell : mesh.get_ghost_cells_info()) {
     auto local_id = mesh.local_cell_id(cell.id);
     MPI_Get(&acc[local_id], 1, MPI_INT,
