@@ -33,7 +33,15 @@ namespace topology {
   entities and their id's. Index space defines the concept of STORAGE -
   whether the actual entities referenced are stored within this index space
   OR contained in a 'master' index space. OWNERSHIP - whether its set of id's
-  are owned by this index space or aliased to another index space and then mustcbe copied before this index space can then modify them. SORTED - refers to if the id's are sorted and can then have set operations directly applied to them, else the index space must first be sorted. To make operations on index spaces faster, the index space is parameterized on a number of these parameters and can be efficiently recast depending on how it is to be used: STORAGE - if true then this is a 'master' index space with its own storage. OWNED - if true then id ownership is definitely true, else must check owned_ at runtime. SORTED - if true then id's are definitely stored and shall remain in sorted order.
+  are owned by this index space or aliased to another index space and then must
+  be copied before this index space can then modify them. SORTED - refers to
+  if the id's are sorted and can then have set operations directly applied
+  to them, else the index space must first be sorted. To make operations on
+  index spaces faster, the index space is parameterized on a number of these
+  parameters and can be efficiently recast depending on how it is to be used:
+      STORAGE - if true then this is a 'master' index space with its own storage.
+      OWNED - if true then id ownership is definitely true, else must check owned_ at runtime.
+      SORTED - if true then id's are definitely stored and shall remain in sorted order.
 */
 
 template<
