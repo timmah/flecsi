@@ -29,11 +29,19 @@
 /// Each storage type may have additional parameters that need to be passed
 /// to this macro.
 ///
-#define flecsi_register_data(client, nspace, name, data_type, storage_type, ...)\
+#define flecsi_register_data(client, nspace, name, data_type,                  \
+  storage_type, ...)                                                           \
 	flecsi::data::storage_t::instance().register_data<                           \
     flecsi::data::storage_type, data_type,                                     \
 		flecsi::utils::const_string_t{EXPAND_AND_STRINGIFY(nspace)}.hash()>(       \
       client, EXPAND_AND_STRINGIFY(name), ##__VA_ARGS__)
+
+#define flecsi_new_register_data(client_type, nspace, name, data_type,         \
+  storage_type, ...)                                                           \
+  flecsi::data::storage_t::instance().new_register_data<                       \
+    client_type, flecsi::data::storage_type, data_type,                        \
+		flecsi::utils::const_string_t{EXPAND_AND_STRINGIFY(nspace)}.hash()>(       \
+      EXPAND_AND_STRINGIFY(name), ##__VA_ARGS__)
 
 ///
 /// \brief Access data with a data_client_t.

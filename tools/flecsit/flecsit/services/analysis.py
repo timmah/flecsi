@@ -50,7 +50,7 @@ class FleCSIT_Analysis(Service):
     # Main.
     #--------------------------------------------------------------------------#
 
-    def main(self, args=None):
+    def main(self, build, args=None):
 
         """
         """
