@@ -11,7 +11,8 @@
 #include "flecsi/execution/context.h"
 #include "flecsi/execution/legion/task_args.h"
 
-#if ( FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion ||  FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_legion)
+#if (FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion || \
+  FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_legion)
   #include "flecsi/execution/mpilegion/legion_handshake.h"
   #include "flecsi/data/legion/dense.h"
 #else
@@ -22,45 +23,70 @@
 #include "flecsi/utils/tuple_type_converter.h"
 
 ///
-// \file legion/task_wrapper.h
-// \authors bergen, nickm
-// \date Initial file creation: Jul 24, 2016
+/// \file
+/// \date Initial file creation: Jul 24, 2016
 ///
 
 namespace flecsi {
 namespace execution {
 
-  template<size_t I, typename AS, typename PS>
-  struct create_task_args__{
+  ///
+  /// \brief
+  ///
+  /// \tparam I FIXME
+  /// \tparam AS FIXME
+  /// \tparam PS FIXME
+  ///
+  template<
+    size_t I,
+    typename AS,
+    typename PS
+  >
+  struct create_task_args__
+  {
     using context_t = LegionRuntime::HighLevel::Context;
     using runtime_t = LegionRuntime::HighLevel::HighLevelRuntime;
-    using regions_t = 
+    using regions_t =
       const std::vector<LegionRuntime::HighLevel::PhysicalRegion>;
 
-    static size_t
-    create(context_t context,
-           runtime_t* runtime,
-           regions_t& regions, AS& args,
-           size_t& region){
-      
+    ///
+    ///
+    ///
+    static
+    size_t
+    create(
+      context_t context,
+      runtime_t* runtime,
+      regions_t& regions, AS& args,
+      size_t& region
+    )
+    {
       using type = 
-        typename std::tuple_element<std::tuple_size<AS>::value - I,PS>::type;
+        typename std::tuple_element<std::tuple_size<AS>::value - I, PS>::type;
 
       handle_<type>(context, runtime, regions,
-                    std::get<std::tuple_size<AS>::value - I>(args), region);
+        std::get<std::tuple_size<AS>::value - I>(args), region);
 
-      return create_task_args__<I - 1, AS, PS>::
-        create(context, runtime, regions, args, region);
-    }
+      return create_task_args__<I - 1, AS, PS>::create(
+        context, runtime, regions, args, region);
+    } // create
 
-    template<typename PT>
-    static void
-    handle_(context_t context,
-           runtime_t* runtime,
-           regions_t& regions,
-           flecsi::data_handle_t<void, 0, 0, 0>& h,
-           size_t& region){
-      
+    ///
+    /// \tparam PT FIXME
+    ///
+    template<
+      typename PT
+    >
+    static
+    void
+    handle_(
+      context_t context,
+      runtime_t* runtime,
+      regions_t& regions,
+      flecsi::data_handle_t<void, 0, 0, 0>& h,
+      size_t& region
+    )
+    {
       flecsi::execution::field_ids_t & fid_t = 
         flecsi::execution::field_ids_t::instance();
 
@@ -76,7 +102,7 @@ namespace execution {
       LegionRuntime::Accessor::ByteOffset bo[1];
       h.data = ac.template raw_rect_ptr<1>(r, sr, bo);
       h.size = r.hi;
-    }
+    } // handle_
 
     template<
       typename PT,
@@ -84,20 +110,41 @@ namespace execution {
     >
     static typename
     std::enable_if_t<!std::is_base_of<flecsi::data_handle_base, R>::value>
-    handle_(context_t, runtime_t*, regions_t&, R&, size_t&){}
-  };
+    handle_(
+      context_t,
+      runtime_t *,
+      regions_t &,
+      R &,
+      size_t&
+    )
+    {}
 
-  template<typename AS, typename PS>
-  struct create_task_args__<0, AS, PS>{
-    static size_t
-    create(LegionRuntime::HighLevel::Context context,
-          LegionRuntime::HighLevel::HighLevelRuntime* runtime,
-           const std::vector<
-             LegionRuntime::HighLevel::PhysicalRegion>&, AS& args,
-             size_t& region){
+  }; // struct create_task_args__
+
+  ///
+  /// \brief
+  ///
+  template<
+    typename AS,
+    typename PS
+  >
+  struct create_task_args__<0, AS, PS>
+  {
+
+    static
+    size_t
+    create(
+      LegionRuntime::HighLevel::Context context,
+      LegionRuntime::HighLevel::HighLevelRuntime* runtime,
+      const std::vector<LegionRuntime::HighLevel::PhysicalRegion> &,
+      AS & args,
+      size_t & region
+    )
+    {
       return 0;
-    }
-  };
+    } // create
+
+  }; // struct create_task_args__
 
 ///
 /// \brief
@@ -200,6 +247,8 @@ struct legion_task_wrapper__
     return retval;
   } // execute
 
+
+// Why is this commented out? This seems broken.
 #if 0
   static R execute_mpi(const LegionRuntime::HighLevel::Task * task,
     const std::vector<LegionRuntime::HighLevel::PhysicalRegion>& regions,
@@ -229,7 +278,7 @@ struct legion_task_wrapper__
   } // execute_mpi
 #endif
 
-}; // class legion_task_wrapper__
+}; // struct legion_task_wrapper__
 
 ///
 /// Partial specialization for void.
@@ -301,10 +350,14 @@ struct legion_task_wrapper__<P, S, I, void, A>
   /// This method executes the user's task after processing the arguments
   /// from the Legion runtime.
   ///
-  static void execute(const LegionRuntime::HighLevel::Task * task,
+  static
+  void
+  execute(
+    const LegionRuntime::HighLevel::Task * task,
     const std::vector<LegionRuntime::HighLevel::PhysicalRegion> & regions,
     LegionRuntime::HighLevel::Context context,
-    LegionRuntime::HighLevel::HighLevelRuntime * runtime)
+    LegionRuntime::HighLevel::HighLevelRuntime * runtime
+  )
   {
     // Unpack task arguments
     task_args_t & task_args = 
@@ -317,11 +370,13 @@ struct legion_task_wrapper__<P, S, I, void, A>
     context_t::instance().push_state(user_task_handle.key,
       context, runtime, task, regions);
 
+    // Static processing of task arguements
     size_t region = 0;
     create_task_args__<std::tuple_size<user_task_args_t>::value,
       user_task_args_t, args_t>::create(
         context, runtime, regions, user_task_args, region);
 
+    // Actual call to user task
     user_task_handle(context_t::instance().function(user_task_handle.key),
       user_task_args);
 
@@ -330,10 +385,14 @@ struct legion_task_wrapper__<P, S, I, void, A>
   } // execute
 
 #if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion
-  static void execute_mpi(const LegionRuntime::HighLevel::Task * task,
-    const std::vector<LegionRuntime::HighLevel::PhysicalRegion>& regions,
+  static
+  void
+  execute_mpi(
+    const LegionRuntime::HighLevel::Task * task,
+    const std::vector<LegionRuntime::HighLevel::PhysicalRegion> & regions,
     LegionRuntime::HighLevel::Context context,
-    LegionRuntime::HighLevel::HighLevelRuntime * runtime)
+    LegionRuntime::HighLevel::HighLevelRuntime * runtime
+  )
   {
 #ifdef LEGIONDEBUG
      int rank;
@@ -347,8 +406,6 @@ struct legion_task_wrapper__<P, S, I, void, A>
     user_task_args_t & user_task_args = task_args.user_args;
 
     // Get the user task arguments
-//  auto user_args = tuple_filter_index_<greater_than, task_args_t>(task_args);
- 
     std::function<void()> bound_user_task =
       std::bind(*reinterpret_cast<std::function<void(user_task_args_t)> *>(
       context_t::instance().function(user_task_handle.key)), user_task_args);

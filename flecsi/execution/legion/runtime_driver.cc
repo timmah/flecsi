@@ -29,28 +29,30 @@
 namespace flecsi {
 namespace execution {
 
-void legion_runtime_driver(const LegionRuntime::HighLevel::Task * task,
+void
+legion_runtime_driver(
+  const LegionRuntime::HighLevel::Task * task,
 	const std::vector<LegionRuntime::HighLevel::PhysicalRegion> & regions,
 	LegionRuntime::HighLevel::Context ctx,
-	LegionRuntime::HighLevel::HighLevelRuntime * runtime)
-	{
-    const LegionRuntime::HighLevel::InputArgs & args =
-      LegionRuntime::HighLevel::HighLevelRuntime::get_input_args();
+	LegionRuntime::HighLevel::HighLevelRuntime * runtime
+)
+{
+  const LegionRuntime::HighLevel::InputArgs & args =
+    LegionRuntime::HighLevel::HighLevelRuntime::get_input_args();
 
-    // Set the current task context to the driver
-		context_t::instance().push_state(utils::const_string_t{"driver"}.hash(),
-      ctx, runtime, task, regions);
+  // Set the current task context to the driver
+  context_t::instance().push_state(flecsi_hash(driver), ctx, runtime,
+    task, regions);
 
-    // run default or user-defined specialization driver 
-    specialization_driver(args.argc, args.argv);
+  // run default or user-defined specialization driver 
+  specialization_driver(args.argc, args.argv);
 
-    // run default or user-defined driver 
-    driver(args.argc, args.argv); 
+  // run default or user-defined driver 
+  driver(args.argc, args.argv); 
 
-    // Set the current task context to the driver
-		context_t::instance().pop_state(utils::const_string_t{"driver"}.hash());
-
-	} // legion_runtime_driver
+  // Set the current task context to the driver
+  context_t::instance().pop_state(flecsi_hash(driver));
+} // legion_runtime_driver
 
 } // namespace execution 
 } // namespace flecsi
