@@ -563,7 +563,57 @@ ghost_part_task(
 }//ghost_part_task
 
 void
-first_compaction_task(
+debug_task(
+  const Legion::Task *task,
+  const std::vector<Legion::PhysicalRegion> & regions,
+  Legion::Context ctx, Legion::HighLevelRuntime *runtime
+)
+{
+  assert(regions.size() == 3);
+  assert(task->regions.size() == 3);
+  assert(task->regions[0].privilege_fields.size() == 1);
+  assert(task->regions[1].privilege_fields.size() == 1);
+  assert(task->regions[2].privilege_fields.size() == 1);
+
+  using field_id = LegionRuntime::HighLevel::FieldID;
+  using generic_type = LegionRuntime::Accessor::AccessorType::Generic;
+
+  std::cout << "DEBUG TASK" << std::endl;
+
+  field_id fid_legion_ghost = *(task->regions[2].privilege_fields.begin());
+  LegionRuntime::Accessor::RegionAccessor<generic_type, size_t>
+    acc_legion_ghost = regions[2].get_field_accessor(fid_legion_ghost).typeify<size_t>();
+  LegionRuntime::HighLevel::IndexIterator itr_legion_ghost(runtime, ctx, regions[2].get_logical_region().get_index_space());
+
+  field_id fid_legion_shared = *(task->regions[1].privilege_fields.begin());
+  LegionRuntime::Accessor::RegionAccessor<generic_type, size_t>
+    acc_legion_shared = regions[1].get_field_accessor(fid_legion_shared).typeify<size_t>();
+  LegionRuntime::HighLevel::IndexIterator itr_legion_shared(runtime, ctx, regions[1].get_logical_region().get_index_space());
+
+  field_id fid_legion_exclusive = *(task->regions[0].privilege_fields.begin());
+  LegionRuntime::Accessor::RegionAccessor<generic_type, size_t>
+    acc_legion_exclusive = regions[0].get_field_accessor(fid_legion_exclusive).typeify<size_t>();
+  LegionRuntime::HighLevel::IndexIterator itr_legion_exclusive(runtime, ctx, regions[0].get_logical_region().get_index_space());
+
+  while (itr_legion_exclusive.has_next()) {
+    ptr_t legion_ptr = itr_legion_exclusive.next();
+    std::cout << "excl " << legion_ptr.value << " = " << acc_legion_exclusive.read(legion_ptr) << std::endl;
+  }
+
+  while (itr_legion_shared.has_next()) {
+    ptr_t legion_ptr = itr_legion_shared.next();
+    std::cout << "shrd " << legion_ptr.value << " = " << acc_legion_shared.read(legion_ptr) << std::endl;
+  }
+
+  while (itr_legion_ghost.has_next()) {
+    ptr_t legion_ptr = itr_legion_ghost.next();
+    std::cout << "ghst " << legion_ptr.value << " = " << acc_legion_ghost.read(legion_ptr) << std::endl;
+  }
+
+}
+
+void
+copy_legion_to_flecsi_task(
   const Legion::Task *task,
   const std::vector<Legion::PhysicalRegion> & regions,
   Legion::Context ctx, Legion::HighLevelRuntime *runtime
@@ -594,18 +644,19 @@ first_compaction_task(
   field_id fid_flecsi_exclusive = *(task->regions[2].privilege_fields.begin());
   LegionRuntime::Accessor::RegionAccessor<generic_type, size_t>
     acc_flecsi_exclusive = regions[2].get_field_accessor(fid_flecsi_exclusive).typeify<size_t>();
-  Domain flecsi_exclusive_dom = runtime->get_index_space_domain(ctx, regions[2].get_logical_region().get_index_space());
-  Rect<1> flecsi_exclusive_rect = flecsi_exclusive_dom.get_rect<1>();
 
   field_id fid_flecsi_shared = *(task->regions[3].privilege_fields.begin());
   LegionRuntime::Accessor::RegionAccessor<generic_type, size_t>
     acc_flecsi_shared = regions[3].get_field_accessor(fid_flecsi_shared).typeify<size_t>();
-  Domain flecsi_shared_dom = runtime->get_index_space_domain(ctx, regions[3].get_logical_region().get_index_space());
-  Rect<1> flecsi_shared_rect = flecsi_shared_dom.get_rect<1>();
 
-  for (GenericPointInRectIterator<1> flecsi_pir(flecsi_shared_rect); flecsi_pir; flecsi_pir++) {
+  while (itr_legion_shared.has_next()) {
     ptr_t legion_ptr = itr_legion_shared.next();
-    acc_flecsi_shared.write(DomainPoint::from_point<1>(flecsi_pir.p), acc_legion_shared.read(legion_ptr));
+    acc_flecsi_shared.write(legion_ptr, acc_legion_shared.read(legion_ptr));
+  }
+
+  while (itr_legion_exclusive.has_next()) {
+    ptr_t legion_ptr = itr_legion_exclusive.next();
+    acc_flecsi_exclusive.write(legion_ptr, acc_legion_exclusive.read(legion_ptr));
   }
 
 }
@@ -671,7 +722,6 @@ check_partitioning_task(
     assert(itr_shared.has_next());
      ptr_t ptr=itr_shared.next();
      assert(shared_cell.id == acc_shared.read(ptr));
-     std::cout << my_color << " shared " << indx << " = " << shared_cell.id << std::endl;
      indx++;
     }
     assert (indx == ip.shared.size());
@@ -681,7 +731,6 @@ check_partitioning_task(
      assert(itr_exclusive.has_next());
      ptr_t ptr=itr_exclusive.next();
      assert(exclusive_cell.id == acc_exclusive.read(ptr));
-     std::cout << my_color << " exclusive " << indx << " = " << exclusive_cell.id << std::endl;
     indx++;
     }
     assert (indx == ip.exclusive.size());

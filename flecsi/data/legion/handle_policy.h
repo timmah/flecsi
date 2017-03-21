@@ -19,6 +19,9 @@ namespace data {
 
 struct legion_handle_policy_t
 {
+  size_t exclusive_priv;
+  size_t shared_priv;
+  size_t ghost_priv;
   Legion::LogicalRegion lr;
   Legion::IndexPartition exclusive_ip;
   Legion::IndexPartition shared_ip;
@@ -26,12 +29,14 @@ struct legion_handle_policy_t
   Legion::LogicalRegion exclusive_lr;
   Legion::LogicalRegion shared_lr;
   Legion::LogicalRegion ghost_lr;
+  Legion::PhysicalRegion exclusive_pr;
   void* exclusive_data;
-  size_t exclusive_size;
+  Legion::PhysicalRegion shared_pr;
   void* shared_data;
-  size_t shared_size;
+  Legion::PhysicalRegion ghost_pr;
   void* ghost_data;
-  size_t ghost_size;
+  Legion::Context context;
+  Legion::Runtime* runtime;
 };
 
 } // namespace data
