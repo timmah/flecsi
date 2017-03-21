@@ -41,11 +41,18 @@ legion_runtime_driver(
     LegionRuntime::HighLevel::HighLevelRuntime::get_input_args();
 
   // Set the current task context to the driver
-  context_t::instance().push_state(flecsi_hash(driver), ctx, runtime,
-    task, regions);
+  context_t::instance().push_state(flecsi_hash(specialization_driver),
+    ctx, runtime, task, regions);
 
   // run default or user-defined specialization driver 
   specialization_driver(args.argc, args.argv);
+
+  // Set the current task context to the driver
+  context_t::instance().pop_state(flecsi_hash(specialization_driver));
+
+  // Set the current task context to the driver
+  context_t::instance().push_state(flecsi_hash(driver), ctx, runtime,
+    task, regions);
 
   // run default or user-defined driver 
   driver(args.argc, args.argv); 
