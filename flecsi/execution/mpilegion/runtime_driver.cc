@@ -158,7 +158,7 @@ spmd_task(
   using generic_type = LegionRuntime::Accessor::AccessorType::Generic;
   using field_id = LegionRuntime::HighLevel::FieldID;
 
-  clog(info) << "insude SPMD task, shard# = " << my_shard << std::endl;
+  clog(info) << "inside SPMD task, shard# = " << my_shard << std::endl;
 
   const LegionRuntime::HighLevel::InputArgs & args =
       LegionRuntime::HighLevel::HighLevelRuntime::get_input_args();
