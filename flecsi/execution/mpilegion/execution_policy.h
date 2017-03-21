@@ -39,115 +39,70 @@
 namespace flecsi {
 namespace execution {
 
-  template<size_t I, typename T, typename L>
+  template<size_t I, typename T>
   struct handle_task_args__{
     static size_t walk(Legion::Runtime* runtime, Legion::Context ctx,
-                       T& t, L& l, size_t& region){
+                       T& t, size_t& region,
+                       std::vector<RegionRequirement>& rrs){
       handle_(runtime, ctx, 
-              std::get<std::tuple_size<T>::value - I>(t), l, region);
-      return handle_task_args__<I - 1, T, L>::walk(runtime, ctx,
-                                                   t, l, region);
+              std::get<std::tuple_size<T>::value - I>(t), region, rrs);
+      return handle_task_args__<I - 1, T>::walk(runtime, ctx,
+                                                   t, region, rrs);
     }
 
-    template<typename S, size_t EP, size_t SP, size_t GP>
-    static void handle_(Legion::Runtime* runtime, Legion::Context ctx,
-                        flecsi::data_handle_t<S, EP, SP, GP>& h,
-                        L& l,
-                        size_t& region){
-
-      flecsi::execution::field_ids_t & fid_t = 
-        flecsi::execution::field_ids_t::instance();
-
-      RegionRequirement rr1(h.exclusive_lr, EP, EXCLUSIVE, h.exclusive_lr);
-      rr1.add_field(fid_t.fid_value);
-      l.add_region_requirement(rr1);
-
-      RegionRequirement rr2(h.shared_lr, SP, EXCLUSIVE, h.shared_lr);
-      rr2.add_field(fid_t.fid_value);
-      l.add_region_requirement(rr2);
-
-      RegionRequirement rr3(h.ghost_lr, GP, EXCLUSIVE, h.ghost_lr);
-      rr3.add_field(fid_t.fid_value);
-      l.add_region_requirement(rr3);
-    }
-
-    template<typename R>
-    static
-    typename std::enable_if_t<!std::is_base_of<flecsi::data_handle_base, R>::
-      value>
-    handle_(Legion::Runtime*, Legion::Context, R&, L&, size_t&){}
-  };
-
-  template<typename T, typename L>
-  struct handle_task_args__<0, T, L>{
-    static size_t walk(Legion::Runtime*, Legion::Context,
-                       T& t, L& l, size_t& region){
-      return 0;
-    }
-  };
-
-  template<size_t I, typename T, typename L>
-  struct handle_index_task_args__{
-    static size_t walk(Legion::Runtime* runtime, Legion::Context ctx,
-                       T& t, L& l, size_t& region){
-      handle_(runtime, ctx,
-              std::get<std::tuple_size<T>::value - I>(t), l, region);
-      return handle_task_args__<I - 1, T, L>::walk(runtime, ctx,
-                                                   t, l, region);
-    }
-
-    template<typename S, size_t EP, size_t SP, size_t GP>
-    static void handle_(Legion::Runtime* runtime, Legion::Context ctx,
-                        flecsi::data_handle_t<S, EP, SP, GP>& h,
-                        L& l,
-                        size_t& region){
-
-      flecsi::execution::field_ids_t & fid_t = 
-        flecsi::execution::field_ids_t::instance();
-
-      //h.region = region++;
-
-      LogicalPartition lp =
-        runtime->get_logical_partition(ctx, h.lr, h.exclusive_ip);
-
-      switch(EP){
-        case size_t(data::privilege::none):
-          assert(false && 
-                 "no privileges found on task arg while generating "
-                 "region requirements");
-          break;
-        case size_t(data::privilege::ro):{
-          RegionRequirement rr(lp, 0, READ_ONLY, EXCLUSIVE, h.lr);
-          rr.add_field(fid_t.fid_value);
-          l.add_region_requirement(rr);
-          break;
-        }
-        case size_t(data::privilege::wd):{
-          RegionRequirement rr(lp, 0, WRITE_DISCARD, EXCLUSIVE, h.lr);
-          rr.add_field(fid_t.fid_value);
-          l.add_region_requirement(rr);
-          break;
-        }
-        case size_t(data::privilege::rw):{
-          RegionRequirement rr(lp, 0, READ_WRITE, EXCLUSIVE, h.lr);
-          rr.add_field(fid_t.fid_value);
-          l.add_region_requirement(rr);
-          break;
-        }
+    static Legion::PrivilegeMode mode(size_t p){
+      switch(p){
+        case 0:
+          return NO_ACCESS;
+        case 1:
+          return READ_ONLY;
+        case 2:
+          return WRITE_DISCARD;
+        case 3:
+          return READ_WRITE;
+        default:
+          assert(false);
       }
     }
 
+    template<typename S, size_t EP, size_t SP, size_t GP>
+    static void handle_(Legion::Runtime* runtime, Legion::Context ctx,
+                        flecsi::data_handle_t<S, EP, SP, GP>& h,
+                        size_t& region,
+                        std::vector<RegionRequirement>& rrs){
+
+      flecsi::execution::field_ids_t & fid_t = 
+        flecsi::execution::field_ids_t::instance();
+
+      RegionRequirement rr1(h.exclusive_lr, mode(EP), EXCLUSIVE, h.exclusive_lr);
+      rr1.add_field(fid_t.fid_value);
+      rrs.push_back(rr1);
+      h.exclusive_priv = EP;
+
+      RegionRequirement rr2(h.shared_lr, mode(SP), EXCLUSIVE, h.shared_lr);
+      rr2.add_field(fid_t.fid_value);
+      rrs.push_back(rr2);
+      h.shared_priv = SP;
+
+      RegionRequirement rr3(h.ghost_lr, mode(GP), EXCLUSIVE, h.ghost_lr);
+      rr3.add_field(fid_t.fid_value);
+      rrs.push_back(rr3);
+      h.ghost_priv = GP;
+    }
+
     template<typename R>
     static
     typename std::enable_if_t<!std::is_base_of<flecsi::data_handle_base, R>::
       value>
-    handle_(Legion::Runtime* runtime, Legion::Context ctx, R&, L&, size_t&){}
+    handle_(Legion::Runtime*, Legion::Context, R&, size_t&,
+            std::vector<RegionRequirement>&){}
   };
 
-  template<typename T, typename L>
-  struct handle_index_task_args__<0, T, L>{
-    static size_t walk(Legion::Runtime* runtime, Legion::Context ctx,
-                       T& t, L& l, size_t& region){
+  template<typename T>
+  struct handle_task_args__<0, T>{
+    static size_t walk(Legion::Runtime*, Legion::Context,
+                       T& t, size_t& region,
+                       std::vector<RegionRequirement>& rrs){
       return 0;
     }
   };
@@ -338,16 +293,24 @@ struct mpilegion_execution_policy_t
 
         case single:
         {
-          TaskLauncher task_launcher(context_.task_id(key),
-            TaskArgument(&task_args, sizeof(task_args_t)));
-
           size_t region = 0;
 
           auto runtime = context_.runtime(parent);
           auto ctx = context_.context(parent);
 
-          handle_task_args__<std::tuple_size<user_task_args_tuple_t>::value, user_task_args_tuple_t, Legion::TaskLauncher>::walk(
-            runtime, ctx, user_task_args_tuple, task_launcher, region);
+          std::vector<RegionRequirement> rrs;
+
+          handle_task_args__<std::tuple_size<user_task_args_tuple_t>::value, user_task_args_tuple_t>::walk(
+            runtime, ctx, user_task_args_tuple, region, rrs);
+
+          task_args_t task_args2(user_task_handle, user_task_args_tuple);
+
+          TaskLauncher task_launcher(context_.task_id(key),
+            TaskArgument(&task_args2, sizeof(task_args_t)));
+
+          for(RegionRequirement& rr : rrs){
+            task_launcher.add_region_requirement(rr);
+          }
 
           auto future = context_.runtime(parent)->execute_task(
             context_.context(parent), task_launcher);
@@ -373,8 +336,7 @@ struct mpilegion_execution_policy_t
 
           size_t region = 0;
 
-          handle_index_task_args__<std::tuple_size<user_task_args_tuple_t>::value, user_task_args_tuple_t, Legion::IndexLauncher>::walk(
-            runtime, ctx, user_task_args_tuple, index_launcher, region);
+          // handle index task args
 
           auto future = runtime->execute_index_space(ctx, index_launcher);
 

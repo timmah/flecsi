@@ -87,6 +87,47 @@ namespace execution {
       size_t& region
     )
     {
+      flecsi::execution::field_ids_t & fid_t = 
+        flecsi::execution::field_ids_t::instance();
+
+      h.context = context;
+      h.runtime = runtime;
+
+      using type = typename PT::type;
+
+      for(size_t p = 0; p < 3; ++p){
+        Legion::PhysicalRegion pr = regions[region++];
+        Legion::LogicalRegion lr = pr.get_logical_region();
+        Legion::IndexSpace is = lr.get_index_space();
+
+        auto ac = 
+          pr.get_field_accessor(fid_t.fid_value).typeify<type>();
+        
+        IndexIterator itr(runtime, context, is);
+        
+        auto values = new std::vector<type>; 
+
+        while(itr.has_next()){
+          values->push_back(ac.read(itr.next()));
+        }
+
+        switch(p){
+          case 0:
+            h.exclusive_pr = pr;
+            h.exclusive_data = values;
+            break;
+          case 1:
+            h.shared_pr = pr;
+            h.shared_data = values;
+            break;
+          case 2:
+            h.ghost_pr = pr;
+            h.ghost_data = values;
+            break;
+          default:
+            assert(false);
+        }
+      }
     } // handle_
 
     template<
