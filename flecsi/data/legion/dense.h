@@ -32,7 +32,7 @@
 #include "flecsi/utils/index_space.h"
 #include "flecsi/execution/context.h"
 #include "flecsi/data/legion/data_policy.h"
-#include "flecsi/execution/legion/helper.h"
+#include "flecsi/execution/legion/legion_helper.h"
 #include "flecsi/execution/task_ids.h"
 
 #define np(X)                                                            \

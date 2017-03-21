@@ -19,7 +19,7 @@
 
 #include <legion.h>
 
-#include "flecsi/execution/legion/helper.h"
+#include "flecsi/execution/legion/legion_helper.h"
 
 #define np(X)                                                            \
  std::cout << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ \
