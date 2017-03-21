@@ -138,8 +138,8 @@ struct dense_accessor_t : public accessor__<T>
     is_(a.is_){}
 
   dense_accessor_t(const data_handle_t<void, 0, 0, 0>& h)
-  : size_(h.size),
-  data_(static_cast<T*>(h.data)){}
+  : size_(h.exclusive_size),
+  data_(static_cast<T*>(h.exclusive_data)){}
 
   ~dense_accessor_t(){
     if(data_){
@@ -422,7 +422,7 @@ struct storage_type_t<dense, DS, MD>
   )
   {
 
-    size_t h = key.hash() ^ data_client.runtime_id();
+    size_t h = key.hash()/* ^ data_client.runtime_id()*/;
     
     // Runtime assertion that this key is unique
     assert(data_store[NS].find(h) == data_store[NS].end() &&
@@ -502,62 +502,17 @@ struct storage_type_t<dense, DS, MD>
 
       auto data = data_store[NS][h].create_legion_data();
 
-      LegionRuntime::HighLevel::IndexSpace is =
-        helper.create_index_space(0, size);
-      LegionRuntime::HighLevel::FieldSpace fs = helper.create_field_space();
+      data.is = isp.entities_lr.get_index_space();
+      
+      data.fs = helper.create_field_space();
       LegionRuntime::HighLevel::FieldAllocator a =
-          helper.create_field_allocator(fs);
+          helper.create_field_allocator(data.fs);
       a.allocate_field(type_size, fid_t.fid_value);
-      data.lr = helper.create_logical_region(is, fs);
+      data.lr = helper.create_logical_region(data.is, data.fs);
 
-      Legion::DomainColoring exclusive_dc;
-      Legion::DomainColoring shared_dc;
-      Legion::DomainColoring ghost_dc;
-
-      size_t p = 0;
-      size_t idx = 0;
-      for(auto& itr : isp.exclusive_count_map){
-        size_t start = idx;
-        idx += itr.second;
-        LegionRuntime::HighLevel::Domain d =
-          helper.domain_from_rect(start, idx - 1);
-        exclusive_dc[p] = d;
-        ++p;
-      }
-
-      LegionRuntime::HighLevel::Domain cd = 
-        helper.domain_from_rect(0, p - 1);
-
-      p = 0;
-      idx = 0;
-      for(auto& itr : isp.shared_count_map){
-        size_t start = idx;
-        idx += itr.second;
-        LegionRuntime::HighLevel::Domain d =
-          helper.domain_from_rect(start, idx - 1);
-        shared_dc[p] = d;
-        ++p;
-      }
-
-      p = 0;
-      idx = 0;
-      for(auto& itr : isp.ghost_count_map){
-        size_t start = idx;
-        idx += itr.second;
-        LegionRuntime::HighLevel::Domain d =
-          helper.domain_from_rect(start, idx - 1);
-        ghost_dc[p] = d;
-        ++p;
-      }
-
-      data.exclusive_ip = 
-        runtime->create_index_partition(ctx, is, cd, exclusive_dc, true);
-
-      data.shared_ip = 
-        runtime->create_index_partition(ctx, is, cd, shared_dc, true);
-
-      data.ghost_ip = 
-        runtime->create_index_partition(ctx, is, cd, ghost_dc, false);
+      data.exclusive_ip = isp.exclusive_ip;
+      data.shared_ip = isp.shared_ip;
+      data.ghost_ip = isp.ghost_ip;
 
       data_store[NS][h].put_legion_data(i, data);
 
@@ -699,7 +654,7 @@ struct storage_type_t<dense, DS, MD>
     size_t version
   )
   {
-    auto hash = key.hash() ^ data_client.runtime_id();
+    auto hash = key.hash()/* ^ data_client.runtime_id()*/;
     return get_accessor<T,NS>(data_store, hash, version);
   } // get_accessor
 
@@ -942,7 +897,7 @@ struct storage_type_t<dense, DS, MD>
   {
     using namespace execution;
 
-    auto hash = key.hash() ^ data_client.runtime_id();
+    auto hash = key.hash()/* ^ data_client.runtime_id()*/;
     auto itr = data_store[NS].find(hash);
     assert(itr != data_store[NS].end() && "invalid key");
     auto& md = itr->second;
@@ -954,7 +909,10 @@ struct storage_type_t<dense, DS, MD>
     h.exclusive_ip = data.exclusive_ip;
     h.shared_ip = data.shared_ip;
     h.ghost_ip = data.ghost_ip;
-    
+    h.exclusive_lr = data.exclusive_lr;
+    h.shared_lr = data.shared_lr;
+    h.ghost_lr = data.ghost_lr;
+
     return h;
   } // get_handle
 
@@ -966,13 +924,13 @@ struct storage_type_t<dense, DS, MD>
                        std::vector<size_t>& versions){
     
     for(auto& itr : data_store){
-      hashes.emplace_back(itr.first);
       for(auto& itr2 : itr.second){
-        namespaces.emplace_back(itr2.first);
 
         auto& md = itr2.second;
 
         for(auto& itr3 : md.data){
+          hashes.emplace_back(itr.first);
+          namespaces.emplace_back(itr2.first);
           versions.emplace_back(itr3.first);
 
           auto& ld = itr3.second;
@@ -986,6 +944,31 @@ struct storage_type_t<dense, DS, MD>
       }
     }
   }
+
+  static
+  void
+  put_all_handles(
+     const data_client_t & data_client,
+     data_store_t & data_store,
+     size_t num_handles,
+     data_handle_t<void, 0, 0, 0>* handles,
+     size_t* hashes,
+     size_t* namespaces,
+     size_t* versions
+    )
+  {
+    for(size_t i = 0; i < num_handles; ++i){
+      auto& ld = data_store[hashes[i]][namespaces[i]].data[versions[i]];
+      auto& hi = handles[i];
+      ld.exclusive_ip = hi.exclusive_ip;
+      ld.shared_ip = hi.shared_ip;
+      ld.ghost_ip = hi.ghost_ip;
+      ld.exclusive_lr = hi.exclusive_lr;
+      ld.shared_lr = hi.shared_lr;
+      ld.ghost_lr = hi.ghost_lr;
+    }
+  }
+
 
 }; // struct storage_type_t
 

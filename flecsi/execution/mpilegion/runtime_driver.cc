@@ -18,6 +18,8 @@
 #include "flecsi/data/data.h"
 #include "flecsi/execution/test/mpilegion/sprint_common.h"
 
+#include <legion_utilities.h>
+
 #ifndef FLECSI_DRIVER
   #include "flecsi/execution/default_driver.h"
 #else
@@ -30,10 +32,21 @@
   #include EXPAND_AND_STRINGIFY(FLECSI_SPECIALIZATION_DRIVER)
 #endif
 
-#include<vector>
+#include <vector>
 
 namespace flecsi {
 namespace execution {
+
+  namespace{
+
+    struct spmd_task_args{
+      size_t buf_size;
+      size_t num_handles;
+    };
+
+    using handle_t = data_handle_t<void, 0, 0, 0>;
+
+  } // namespace
 
 void
 mpilegion_runtime_driver(
@@ -61,11 +74,11 @@ mpilegion_runtime_driver(
     int argc = args.argc + 1;
     char **argv;
     argv = (char**)std::malloc(sizeof(char*)*argc);
-    std::memcpy(argv, args.argv, args.argc);
+    std::memcpy(argv, args.argv, args.argc*sizeof(char*));
     argv[argc - 1] = (char*)&dc;
 
     // run default or user-defined specialization driver 
-    specialization_driver(args.argc, args.argv);
+    specialization_driver(argc, argv);
 
     //creating phace barriers for SPMD launch from partitions created and 
     //registered to the data Client at the specialization_driver 
@@ -117,47 +130,57 @@ mpilegion_runtime_driver(
     // ndm - need to be able to get data handle here
     field_ids_t & fid_t =field_ids_t::instance();
 
-    std::vector<data_handle_t<void,0,0,0>> handles;
+    std::vector<handle_t> handles;
     std::vector<size_t> hashes;
     std::vector<size_t> namespaces;
     std::vector<size_t> versions;
     flecsi_get_all_handles(dc, dense, handles, hashes, namespaces, versions);
-    std::vector<size_t> task_argument;
-    task_argument.push_back(handles.size());
+    
+    Serializer serializer;
+    serializer.serialize(&handles[0], handles.size() * sizeof(handle_t)); 
+    serializer.serialize(&hashes[0], hashes.size() * sizeof(size_t)); 
+    serializer.serialize(&namespaces[0], namespaces.size() * sizeof(size_t)); 
+    serializer.serialize(&versions[0], versions.size() * sizeof(size_t)); 
 
-    for (int idx = 0; idx < handles.size(); idx++) {
-      task_argument.push_back(hashes[idx]);
-      task_argument.push_back(namespaces[idx]);
-      task_argument.push_back(versions[idx]);
+    const void* args_buf = serializer.get_buffer();
+
+    spmd_task_args sargs;
+    sargs.buf_size = serializer.get_used_bytes();
+    sargs.num_handles = handles.size();
+
+    for(size_t i = 0; i < num_ranks; ++i){
+      arg_map.set_point(Legion::DomainPoint::from_point<1>(
+        LegionRuntime::Arrays::make_point(i)),
+        TaskArgument(&sargs, sizeof(sargs)));
     }
 
     LegionRuntime::HighLevel::IndexLauncher spmd_launcher(
       task_ids_t::instance().spmd_task_id,
       LegionRuntime::HighLevel::Domain::from_rect<1>(
          context_.interop_helper_.all_processes_),
-      TaskArgument(&task_argument.front(),sizeof(size_t)*task_argument.size()), arg_map);
+      TaskArgument(args_buf, sargs.buf_size), arg_map);
+   
     spmd_launcher.tag = MAPPER_FORCE_RANK_MATCH;
 
-
     for (int idx = 0; idx < handles.size(); idx++) {
-      data_handle_t<void,0,0,0> h = handles[idx];
+      handle_t h = handles[idx];
 
       LogicalPartition lp_excl = runtime->get_logical_partition(ctx, h.lr, h.exclusive_ip);
       spmd_launcher.add_region_requirement(
         RegionRequirement(lp_excl, 0 /*proj*/, READ_WRITE, EXCLUSIVE, h.lr));
-      spmd_launcher.add_field(0,fid_t.fid_value);
+      spmd_launcher.add_field(3*idx,fid_t.fid_value);
 
       // FIXME  this is temporary for verifying 1st data movement - this will be RW, SIMUL
       LogicalPartition lp_shared = runtime->get_logical_partition(ctx, h.lr, h.shared_ip);
       spmd_launcher.add_region_requirement(
         RegionRequirement(lp_shared, 0 /*proj*/, READ_ONLY, EXCLUSIVE, h.lr));
-      spmd_launcher.add_field(0,fid_t.fid_value);
+      spmd_launcher.add_field(3*idx + 1,fid_t.fid_value);
 
       // FIXME  this is temporary for verifying 1st data movement - this will be RO, SIMUL for each neighbors' shared and pass ghost_ip as IndexSpace
       LogicalPartition lp_ghost = runtime->get_logical_partition(ctx, h.lr, h.ghost_ip);
       spmd_launcher.add_region_requirement(
         RegionRequirement(lp_ghost, 0 /*proj*/, READ_ONLY, EXCLUSIVE, h.lr));
-      spmd_launcher.add_field(0,fid_t.fid_value);
+      spmd_launcher.add_field(3*idx +2,fid_t.fid_value);
 
       // jpg - do neighbors shared and phase barriers here
     }
@@ -210,26 +233,105 @@ spmd_task(
   Legion::Context ctx, Legion::HighLevelRuntime *runtime
 )
 {
-  const int my_shard= task->index_point.point_data[0];
+
+  const int my_color = task->index_point.point_data[0];
   context_t & context_ = context_t::instance();
   context_.push_state(utils::const_string_t{"driver"}.hash(),
       ctx, runtime, task, regions);
 
+  data_client dc;
+
   // PAIR_PROGRAMMING
   if (task->arglen > 0) {
-    const size_t* handles_data = (const size_t*)task->args;
-    const size_t num_handles = handles_data[0];
+    void* args_buf = task->args;
+    auto args = (spmd_task_args*)task->local_args;
+
+    size_t num_handles = args->num_handles;
+
+    assert(regions.size() == 3*num_handles);
+    assert(task->regions.size() == 3*num_handles);
+
+    Deserializer deserializer(args_buf, args->buf_size);
+
+    void* handles_buf = malloc(sizeof(handle_t) * num_handles);
+    deserializer.deserialize(handles_buf, sizeof(handle_t) * num_handles);
+
+    void* hashes_buf = malloc(sizeof(size_t) * num_handles);
+    deserializer.deserialize(hashes_buf, sizeof(size_t) * num_handles);
+
+    void* namespaces_buf = malloc(sizeof(size_t) * num_handles);
+    deserializer.deserialize(namespaces_buf, sizeof(size_t) * num_handles);
+
+    void* versions_buf = malloc(sizeof(size_t) * num_handles);
+    deserializer.deserialize(versions_buf, sizeof(size_t) * num_handles);
+
+    Legion::LogicalRegion empty_lr;
+    Legion::IndexPartition empty_ip;
+
+    field_ids_t & fid_t =field_ids_t::instance();
+
+    // fix handles on spmd side
+    handle_t* fix_handles = (handle_t*)handles_buf;
     for (size_t idx = 0; idx < num_handles; idx++) {
-      const size_t hash = handles_data[idx*3 + 1];
-      const size_t name_space = handles_data[idx*3 + 2];
-      const size_t version = handles_data[idx*3 + 3];
 
-      std::cout << "found hash:" << hash << " namespace:" << name_space << " version:" << version << std::endl;
+      {
+        LegionRuntime::Accessor::RegionAccessor<LegionRuntime::Accessor::AccessorType::Generic,size_t> acc_legion =
+        regions[3*idx].get_field_accessor(fid_t.fid_value).typeify<size_t>();
 
-      // regions[3 * idx] is exclusive PhysicalRegion
-      // regions[3 * idx + 1] is shared PhysicalRegion
-      // regions[3 * idx + 2] is ghost PhysicalRegion  // FIXME this is temporary for verifying 1st data movement
+        Domain dom = runtime->get_index_space_domain(ctx,
+              task->regions[3*idx].region.get_index_space());
+          Rect<1> rect = dom.get_rect<1>();
+          for (GenericPointInRectIterator<1> pir(rect); pir; pir++) {
+            std::cout << my_color <<"exclusive " << DomainPoint::from_point<1>(pir.p)
+                << " = " << acc_legion.read(DomainPoint::from_point<1>(pir.p)) << std::endl;
+          }
+      }
+
+      {
+        LegionRuntime::Accessor::RegionAccessor<LegionRuntime::Accessor::AccessorType::Generic,size_t> acc_legion =
+        regions[3*idx+1].get_field_accessor(fid_t.fid_value).typeify<size_t>();
+
+        Domain dom = runtime->get_index_space_domain(ctx,
+              task->regions[3*idx+1].region.get_index_space());
+          Rect<1> rect = dom.get_rect<1>();
+          for (GenericPointInRectIterator<1> pir(rect); pir; pir++) {
+            std::cout << my_color <<"shared " << DomainPoint::from_point<1>(pir.p)
+                << " = " << acc_legion.read(DomainPoint::from_point<1>(pir.p)) << std::endl;
+          }
+      }
+
+      {
+        LegionRuntime::Accessor::RegionAccessor<LegionRuntime::Accessor::AccessorType::Generic,size_t> acc_legion =
+        regions[3*idx+2].get_field_accessor(fid_t.fid_value).typeify<size_t>();
+
+        Domain dom = runtime->get_index_space_domain(ctx,
+              task->regions[3*idx+2].region.get_index_space());
+          Rect<1> rect = dom.get_rect<1>();
+          for (GenericPointInRectIterator<1> pir(rect); pir; pir++) {
+            std::cout << my_color <<"ghost " << DomainPoint::from_point<1>(pir.p)
+                << " = " << acc_legion.read(DomainPoint::from_point<1>(pir.p)) << std::endl;
+          }
+      }
+
+
+
+      fix_handles[idx].lr = empty_lr;
+      fix_handles[idx].exclusive_ip = empty_ip;
+      fix_handles[idx].shared_ip = empty_ip;
+      fix_handles[idx].ghost_ip = empty_ip;
+      fix_handles[idx].exclusive_lr = regions[3*idx].get_logical_region();
+      runtime->unmap_region(ctx, regions[3*idx]);
+      fix_handles[idx].shared_lr = regions[3*idx+1].get_logical_region();
+      runtime->unmap_region(ctx, regions[3*idx+1]);
+      fix_handles[idx].ghost_lr = regions[3*idx+2].get_logical_region();  
+      runtime->unmap_region(ctx, regions[3*idx+2]);
     }
+
+    flecsi_put_all_handles(dc, dense, num_handles,
+      (handle_t*)handles_buf,
+      (size_t*)hashes_buf,
+      (size_t*)namespaces_buf,
+      (size_t*)versions_buf);
   }
   // We obtain map of hashes to regions[n] here
   // We create halo LogicalRegions here
@@ -238,12 +340,18 @@ spmd_task(
   using generic_type = LegionRuntime::Accessor::AccessorType::Generic;
   using field_id = LegionRuntime::HighLevel::FieldID;
 
-  clog(info) << "insude SPMD task, shard# = " << my_shard << std::endl;
+  clog(info) << "inside SPMD task, shard# = " << my_color  << std::endl;
 
   const LegionRuntime::HighLevel::InputArgs & args =
       LegionRuntime::HighLevel::HighLevelRuntime::get_input_args();
 
-  driver(args.argc, args.argv);
+  int argc = args.argc + 1;
+  char **argv;
+  argv = (char**)std::malloc(sizeof(char*)*argc);
+  std::memcpy(argv, args.argv, args.argc*sizeof(char*));
+  argv[argc - 1] = (char*)&dc;
+
+  driver(argc, argv);
 
   context_.pop_state(utils::const_string_t{"driver"}.hash());
 }
