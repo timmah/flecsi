@@ -86,10 +86,9 @@ public:
   initialize(
   )
   {
-    handshake_ = Legion::Runtime::create_handshake(true/*MPI initial 
-                                                          control*/,
-                                        1/*MPI participants*/,
-                                        1/*Legion participants*/);
+    handshake_ =
+      Legion::Runtime::create_handshake(true /*MPI initial control*/,
+        1 /*MPI participants*/, 1 /*Legion participants*/);
 	} // initialize
 
 	/// 
@@ -141,9 +140,6 @@ protected:
 
 }; // ext_legion_handshake_t
 
-
-/*--------------------------------------------------------------------------*/
-
 } // namespace execution
 } // namespace flecsi
 
@@ -153,4 +149,3 @@ protected:
  * Formatting options
  * vim: set tabstop=2 shiftwidth=2 expandtab :
  *~-------------------------------------------------------------------------~-*/
-

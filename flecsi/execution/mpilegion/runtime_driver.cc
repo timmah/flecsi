@@ -10,15 +10,18 @@
  */
 
 #include "flecsi/execution/mpilegion/runtime_driver.h"
-#include "flecsi/utils/common.h"
-#include "flecsi/utils/logging.h"
-#include "flecsi/execution/context.h"
-#include "flecsi/execution/task_ids.h"
-#include "flecsi/data/legion/dense.h"
-#include "flecsi/data/data.h"
-#include "flecsi/execution/test/mpilegion/sprint_common.h"
 
 #include <legion_utilities.h>
+#include <vector>
+
+#include "flecsi/data/legion/dense.h"
+#include "flecsi/data/data.h"
+#include "flecsi/execution/context.h"
+#include "flecsi/execution/task_ids.h"
+#include "flecsi/execution/test/mpilegion/sprint_common.h"
+#include "flecsi/utils/common.h"
+#include "flecsi/utils/logging.h"
+
 
 #ifndef FLECSI_DRIVER
   #include "flecsi/execution/default_driver.h"
@@ -31,8 +34,6 @@
 #else
   #include EXPAND_AND_STRINGIFY(FLECSI_SPECIALIZATION_DRIVER)
 #endif
-
-#include <vector>
 
 namespace flecsi {
 namespace execution {
@@ -56,7 +57,7 @@ mpilegion_runtime_driver(
 	LegionRuntime::HighLevel::HighLevelRuntime * runtime
 )
 {
-    std::cout << "mpilegion_runtime_driver started" << std::endl;
+    clog(info) << "mpilegion_runtime_driver started" << std::endl;
                 
     context_t & context_ = context_t::instance();
     context_.push_state(utils::const_string_t{"specialization_driver"}.hash(),

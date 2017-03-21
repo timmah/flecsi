@@ -27,7 +27,7 @@ using namespace LegionRuntime::HighLevel;
 #include "flecsi/data/data.h"
 #include "flecsi/data/data_client.h"
 #include "flecsi/data/legion/data_policy.h"
-#include "flecsi/execution/legion/helper.h"
+#include "flecsi/execution/legion/legion_helper.h"
 #include "flecsi/execution/task_ids.h"
 
 #include "flecsi/execution/test/mpilegion/sprint_common.h"

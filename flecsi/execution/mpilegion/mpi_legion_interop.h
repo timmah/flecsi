@@ -55,8 +55,8 @@ handoff_to_mpi_task(
   LegionRuntime::HighLevel::Context ctx,
   LegionRuntime::HighLevel::HighLevelRuntime * runtime)
 {
-std::cout <<"inside handoff_to_mpi task" <<std::endl;
-    ext_legion_handshake_t::instance().legion_handoff_to_mpi();
+  std::cout <<"inside handoff_to_mpi task" <<std::endl;
+  ext_legion_handshake_t::instance().legion_handoff_to_mpi();
 } // handoff_to_mpi_task
 
 //----------------------------------------------------------------------------//
