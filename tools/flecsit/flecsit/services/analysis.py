@@ -4,9 +4,19 @@
 #------------------------------------------------------------------------------#
 
 import sys
+import os
 
 from flecsit.base import Service
 from flecsit.services.analysis_driver.execute import *
+
+def dir_exists(path):
+    print path
+    if not os.path.exists(path):
+        os.makedirs(path) 
+        
+def sym_exists(source,link_name):
+    if not os.path.exists(link_name):
+        os.symlink(source,link_name)
 
 #------------------------------------------------------------------------------#
 # Documentation handler.
@@ -37,7 +47,7 @@ class FleCSIT_Analysis(Service):
             help='Turn on verbose output.'
         )
 
-        self.parser.add_argument('files', nargs='*', action='append',
+        self.parser.add_argument('project', nargs='*', action='append',
             help='The files to anaylze.'
         )
 
@@ -49,8 +59,7 @@ class FleCSIT_Analysis(Service):
     #--------------------------------------------------------------------------#
     # Main.
     #--------------------------------------------------------------------------#
-
-    def main(self, args=None):
+    def main(self, build, args=None):
 
         """
         """
@@ -58,7 +67,43 @@ class FleCSIT_Analysis(Service):
         #----------------------------------------------------------------------#
         # Process command-line arguments
         #----------------------------------------------------------------------#
-
+        project_name = args.project[0][0]
+        project_header = project_name + '.h'
+        
+        # We first need to set up the directory structure for the 
+        project_dir = os.getcwd() + '/' + project_name
+        build_dir = os.getcwd() + '/build'
+        
+        dir_exists(project_dir)
+        dir_exists(build_dir)
+        
+        flecsi_install = os.path.realpath(__file__).partition("lib")[0].rstrip("/")
+        
+        flecsi_runtime = flecsi_install + '/share/flecsi/runtime'
+        
+        # Create symbolic links to the runtime source files
+        sym_exists(flecsi_runtime+'/runtime_driver.cc', project_dir + '/runtime_driver.cc')
+        sym_exists(flecsi_runtime+'/runtime_main.cc', project_dir + '/runtime_main.cc')
+        
+        # Create a symbolic link to the header file
+        sym_exists(os.getcwd() +'/' + project_header, project_dir + '/' + project_header)
+        
+        # We need to put the library and include paths into the proper format for cmake
+        mangled_list = build['libraries'].split(" ")
+        cmake_lib_dirs = ""
+        
+        for tmp in mangled_list:
+            if(tmp.find('-L')):
+                cmake_lib_dirs += tmp.strip('-L') + ' '
+                
+        
+        cmake_include_dirs = build['includes'].strip('-I')
+        
+        cmake_defines = build['defines']
+        
+        
+                
+        
         execute()
 
     # main
