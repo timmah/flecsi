@@ -23,8 +23,8 @@ if(ENABLE_PARTITIONING AND ENABLE_PARMETIS)
 #  set(CMAKE_CXX_COMPILER "mpiCC")
 
   add_definitions(
-    -DFLECSI_SPECIALIZATION_DRIVER=${CMAKE_SOURCE_DIR}/examples/lax_wendroff/lax_wendroff_specialization.h
-    -DFLECSI_DRIVER=${CMAKE_SOURCE_DIR}/examples/lax_wendroff/lax_wendroff_driver.h)
+    -DFLECSI_SPECIALIZATION_DRIVER=${CMAKE_SOURCE_DIR}/examples/lax_wendroff/specialization_driver.h
+    -DFLECSI_DRIVER=${CMAKE_SOURCE_DIR}/examples/lax_wendroff/driver.h)
 
   #----------------------------------------------------------------------------#
   # Add a rule to build the executable
