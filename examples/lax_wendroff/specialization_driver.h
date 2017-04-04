@@ -14,7 +14,7 @@
 
 ///
 // \file lax_wendroff.h
-// \authors jgraham, irina, bergen
+// \authors jgraham, irina, bergen, gshipman 
 // \date Initial file creation: Feb 2, 2017
 ///
 
@@ -38,9 +38,25 @@ mpi_task(
 
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
+#ifdef LEGIONDEBUG
   std::cout << "My rank: " << rank << std::endl;
-
-  flecsi::io::simple_definition_t sd("simple2d-32x32.msh");
+#endif
+  char const * mesh_file; 
+  { 
+    char const* mesh_default = "simple2d-32x32.msh";
+    char const* mesh_tmp = getenv ("LW_MESH");
+    if (mesh_tmp!=NULL) { 
+      mesh_file = mesh_tmp; 
+      std::cout << "Reading input file: " << mesh_file << std::endl; 
+    }  else { 
+      mesh_file = mesh_default; 
+      std::cout << "LW_MESH environment variable not set "
+                << "defaulting to simple2d-32x32.msh" << std::endl;
+      
+    }
+  }         
+  
+  flecsi::io::simple_definition_t sd(mesh_file); //sd("simple2d-32x32.msh");
   flecsi::dmp::weaver weaver(sd);
 
   using entry_info_t = flecsi::dmp::entry_info_t;

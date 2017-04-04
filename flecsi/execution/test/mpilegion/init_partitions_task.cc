@@ -90,12 +90,12 @@ get_numbers_of_cells_task(
   partitions.ghost_vertices = ip_vertices.ghost.size();
 
   partitions.vertex_conns = raw_cell_vertex_conns.size();
-
+#ifdef LEGIONDEBUG
   std::cout << "about to return partitions (primary,exclusive,shared,ghost) ("
             << partitions.primary_cells << "," 
             <<partitions.exclusive_cells << "," << partitions.shared_cells <<
              "," << partitions.ghost_cells << ")" << std::endl;
-
+#endif 
   return partitions; 
 }//get_numbers_of_cells_task
 
@@ -111,8 +111,9 @@ initialization_task(
   assert(task->regions.size() == 2);
   assert(task->regions[0].privilege_fields.size() == 1);
   assert(task->regions[1].privilege_fields.size() == 1);
+#ifdef LEGIONDEBUG
   std::cout << "Here I am in init_cells" << std::endl;
-
+#endif
   using index_partition_t = flecsi::dmp::index_partition__<size_t>;
   using field_id = LegionRuntime::HighLevel::FieldID;
 

@@ -55,8 +55,10 @@ handoff_to_mpi_task(
   LegionRuntime::HighLevel::Context ctx,
   LegionRuntime::HighLevel::HighLevelRuntime * runtime)
 {
-std::cout <<"inside handoff_to_mpi task" <<std::endl;
-    ext_legion_handshake_t::instance().legion_handoff_to_mpi();
+#ifdef LEGIONDEBUG
+  std::cout <<"inside handoff_to_mpi task" <<std::endl;
+#endif
+  ext_legion_handshake_t::instance().legion_handoff_to_mpi();
 } // handoff_to_mpi_task
 
 //----------------------------------------------------------------------------//
@@ -266,10 +268,13 @@ struct mpi_legion_interop_t
   // The reverse mapping goes the other way
   const std::map<int,Legion::AddressSpace> &forward_mapping =
     runtime->find_forward_MPI_mapping();
+#ifdef LEGIONDEBUG
   for (std::map<int,Legion::AddressSpace>::const_iterator it =
-        forward_mapping.begin(); it != forward_mapping.end(); it++)
-      printf("MPI Rank %d maps to Legion Address Space %d\n",
-            it->first, it->second);
+         forward_mapping.begin(); it != forward_mapping.end(); it++) { 
+    std::cout << "MPI Rank " << it->first << " maps to Legion Address Space " 
+              << it->second << std::endl;
+  }
+#endif
   } // connect_with_mpi/  
 
 

@@ -56,7 +56,9 @@ mpilegion_runtime_driver(
 	LegionRuntime::HighLevel::HighLevelRuntime * runtime
 )
 {
+#ifdef LEGIONDEBUG
     std::cout << "mpilegion_runtime_driver started" << std::endl;
+#endif
                 
     context_t & context_ = context_t::instance();
     context_.push_state(utils::const_string_t{"specialization_driver"}.hash(),
@@ -192,10 +194,17 @@ mpilegion_runtime_driver(
 
     } // for rank
 
- 
-    FutureMap fm = runtime->execute_must_epoch(ctx,must_epoch_launcher);
-    fm.wait_all_results();
+    {
+      uint64_t my_time; 
+      struct timespec start, end;
+      clock_gettime(CLOCK_MONOTONIC, &start); 
+      FutureMap fm = runtime->execute_must_epoch(ctx,must_epoch_launcher);
+      fm.wait_all_results();
+      clock_gettime(CLOCK_MONOTONIC, &end); 
+      my_time = 1000000000L * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec; 
+      std::cout << "EXECUTION TIME: " << my_time << std::endl;
 
+    }
 
     //remove phase barriers:
     for (unsigned idx = 0; idx < phase_barriers.size(); idx++) {

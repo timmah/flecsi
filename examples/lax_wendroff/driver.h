@@ -115,8 +115,16 @@ driver(
   if (my_color == 0)
       std::cout << "time " << time << std::endl;
 
-  flecsi_execute_task(write_to_disk, loc, single, cell_IDs, read_exclusive_shared, my_color);
-
+  {
+    char *write_data;
+    write_data = getenv("LW_DUMP"); 
+    if (write_data==NULL) { 
+      std::cout << "LW_DUMP not specified, defaulting to file dump. Set LW_DUMP=0 to bypass" << std::endl;
+      flecsi_execute_task(write_to_disk, loc, single, cell_IDs, read_exclusive_shared, my_color);
+    } else if(atoi(write_data) == 1) { 
+      flecsi_execute_task(write_to_disk, loc, single, cell_IDs, read_exclusive_shared, my_color);
+    }
+  }
   if (my_color == 0)
         std::cout << "lax wendroff ... all tasks issued" << std::endl;
 } //driver
