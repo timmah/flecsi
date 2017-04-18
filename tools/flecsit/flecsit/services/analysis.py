@@ -7,17 +7,9 @@ import sys
 import os
 
 from flecsit.base import Service
+from flecsit.services.service_utils import *
 from flecsit.services.analysis_driver.execute import *
-from flecsit.services.analysis_driver.cmakelist import *
 
-def dir_exists(path):
-    print path
-    if not os.path.exists(path):
-        os.makedirs(path) 
-        
-def sym_exists(source,link_name):
-    if not os.path.exists(link_name):
-        os.symlink(source,link_name)
 
 #------------------------------------------------------------------------------#
 # Documentation handler.
@@ -42,14 +34,13 @@ class FleCSIT_Analysis(Service):
                  ' source:\"defines string\":\"include paths string\", e.g.,' +
                  ' foo.cc:\"-I/path/one -I/path/two\":\"-DDEF1 -DDEF2\"'
         )
+        
+        # Add general compiler options -I, -L, and -l
+        add_command_line_compiler_options(self.parser)
 
         # add command-line options
         self.parser.add_argument('-v', '--verbose', action='store_true',
             help='Turn on verbose output.'
-        )
-
-        self.parser.add_argument('project', nargs='*', action='append',
-            help='The files to anaylze.'
         )
 
         # set the callback for this sub-command
@@ -61,65 +52,39 @@ class FleCSIT_Analysis(Service):
     # Main.
     #--------------------------------------------------------------------------#
 
-    def main(self, build, args=None):
+    def main(self, config, args=None):
 
         """
         """
-
         #----------------------------------------------------------------------#
         # Process command-line arguments
         #----------------------------------------------------------------------#
-        project_name = args.project[0][0]
-        project_header = project_name + '.cc'
-        
-        # We first need to set up the directory structure for the 
-        project_dir = os.getcwd() + '/' + project_name
-        build_dir = project_dir + '/build'
-        
-        dir_exists(project_dir)
-        dir_exists(build_dir)
-        
-        flecsi_install = os.path.realpath(__file__).partition("lib")[0].rstrip("/")
-        
-        flecsi_runtime = flecsi_install + '/share/flecsi/runtime'
-        
-        # Create symbolic links to the runtime source files
-        sym_exists(flecsi_runtime+'/runtime_driver.cc', project_dir + '/runtime_driver.cc')
-        sym_exists(flecsi_runtime+'/runtime_main.cc', project_dir + '/runtime_main.cc')
-        
-        # Create a symbolic link to the header file
-        sym_exists(os.getcwd() +'/' + project_header, project_dir + '/' + project_header)
-        
-        # We need to put the library and include paths into the proper format for cmake
-        mangled_list = build['libraries'].split(" ")
-        cmake_lib_dirs = ""
-        
-        for tmp in mangled_list:
-            if(tmp.find('-L')):
-                cmake_lib_dirs += tmp.strip('-L') + ' '
-                
-        
-        cmake_include_dirs = build['includes'].replace('-I', '')
-        
-        cmake_include_dirs += " " +flecsi_install + '/include'
-        
-        cmake_defines = build['defines']
-        
-        source_output = cmake_source_template.substitute(
-            CMAKE_VERSION="VERSION 2.8",
-            PROJECT_NAME=project_name,
-            CMAKE_INCLUDE_DIRS=cmake_include_dirs,
-            CMAKE_DEFINES=cmake_defines)
-            
-        print build['libraries']
-        
-        fd = open(project_dir+'/CMakeLists.txt','w')
-        fd.write(source_output[1:-1])
-        fd.close()    
+        project_name = args.driver[0][0]
+        includes = generate_compiler_options(config['includes'],
+            args.include, 'FLECSIT_INCLUDES', '-I')
+        ldflags = generate_compiler_options(config['ldflags'],
+            args.ldflag, 'FLECSIT_LDFLAGS', '-L')
+        libraries = generate_compiler_options(config['libraries'],
+            args.library, 'FLECSIT_LIBRARIES', '-l')
+
+        # Copy cmake config to initialize build dict
+        build = config
+
+        # Set command-line arguments
+#        build['includes'] = includes
+#        build['libraries'] = ldflags + libraries
+
+        # Add driver to build defines
+        build['driver'] = project_name+'.cc'
+#        # Get the base inptut deck name
+#        build['deck'] = splitext(basename(args.driver))[0]
+
+        # Execute build
+        execute(args.verbose, project_name, build)
+
         
                 
-        
-        execute()
+    
 
     # main
 

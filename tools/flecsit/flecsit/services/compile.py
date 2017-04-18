@@ -15,7 +15,7 @@ from flecsit.services.compile_driver.execute import *
 # Documentation handler.
 #------------------------------------------------------------------------------#
 
-class FleCSIT_Analysis(Service):
+class FleCSIT_Compile(Service):
 
     #--------------------------------------------------------------------------#
     # Initialization.
@@ -40,11 +40,6 @@ class FleCSIT_Analysis(Service):
 
         self.parser.add_argument('-v', '--verbose', action='store_true',
             help='Turn on verbose output.'
-        )
-
-        # Required driver argument
-        self.parser.add_argument('driver',
-            help='The file containing the user driver definition.'
         )
 
         # Set the callback for this sub-command
@@ -95,10 +90,10 @@ class FleCSIT_Analysis(Service):
     #--------------------------------------------------------------------------#
 
     class Factory:
-        def create(self, subparsers): return FleCSIT_Analysis(subparsers)
+        def create(self, subparsers): return FleCSIT_Compile(subparsers)
     # class Factory
 
-# class FleCSIT_Analysis
+# class FleCSIT_Compile
 
 #------------------------------------------------------------------------------#
 # Formatting options for emacs and vim.
