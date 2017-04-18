@@ -45,6 +45,8 @@
 // \date Initial file creation: Apr 7, 2016
 ///
 
+using namespace Legion;
+
 namespace flecsi {
 namespace data {
 namespace legion {
