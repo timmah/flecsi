@@ -8,6 +8,7 @@ import os
 
 from flecsit.base import Service
 from flecsit.services.analysis_driver.execute import *
+from flecsit.services.analysis_driver.cmakelist import *
 
 def dir_exists(path):
     print path
@@ -68,11 +69,11 @@ class FleCSIT_Analysis(Service):
         # Process command-line arguments
         #----------------------------------------------------------------------#
         project_name = args.project[0][0]
-        project_header = project_name + '.h'
+        project_header = project_name + '.cc'
         
         # We first need to set up the directory structure for the 
         project_dir = os.getcwd() + '/' + project_name
-        build_dir = os.getcwd() + '/build'
+        build_dir = project_dir + '/build'
         
         dir_exists(project_dir)
         dir_exists(build_dir)
@@ -97,10 +98,23 @@ class FleCSIT_Analysis(Service):
                 cmake_lib_dirs += tmp.strip('-L') + ' '
                 
         
-        cmake_include_dirs = build['includes'].strip('-I')
+        cmake_include_dirs = build['includes'].replace('-I', '')
+        
+        cmake_include_dirs += " " +flecsi_install + '/include'
         
         cmake_defines = build['defines']
         
+        source_output = cmake_source_template.substitute(
+            CMAKE_VERSION="VERSION 2.8",
+            PROJECT_NAME=project_name,
+            CMAKE_INCLUDE_DIRS=cmake_include_dirs,
+            CMAKE_DEFINES=cmake_defines)
+            
+        print build['libraries']
+        
+        fd = open(project_dir+'/CMakeLists.txt','w')
+        fd.write(source_output[1:-1])
+        fd.close()    
         
                 
         

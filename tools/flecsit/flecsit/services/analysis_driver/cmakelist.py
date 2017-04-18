@@ -5,19 +5,30 @@
 
 from string import Template
 
-cc_source_template = Template(
+cmake_source_template = Template(
 """
-/*~-------------------------------------------------------------------------~~*
- * Copyright (c) 2014 Los Alamos National Security, LLC
- * All rights reserved.
- *~-------------------------------------------------------------------------~~*/
+#/*~-------------------------------------------------------------------------~~*
+# * Copyright (c) 2014 Los Alamos National Security, LLC
+# * All rights reserved.
+# *~-------------------------------------------------------------------------~~*/
 
 cmake_minimum_required(${CMAKE_VERSION})
 project(${PROJECT_NAME})
 
-CMAKE_EXPORT_COMPILE_COMMANDS=1
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(${PROJECT_NAME} runtime_driver.cc runtime_main.cc)
+include_directories(${CMAKE_INCLUDE_DIRS})
+
+add_definitions(${CMAKE_DEFINES})
+
+add_definitions(-std=c++14)
+
+add_executable(${PROJECT_NAME} 
+  runtime_driver.cc 
+  runtime_main.cc 
+  ${PROJECT_NAME}.cc)
+
+
 
 
 """)
