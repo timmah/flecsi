@@ -29,7 +29,7 @@ project(flecsi)
 #------------------------------------------------------------------------------#
 
 cinch_add_application_directory("examples")
-cinch_add_application_directory("examples/agile")
+cinch_add_application_directory("examples/lax_wendroff")
 cinch_add_application_directory("bin")
 cinch_add_application_directory("tools")
 
@@ -49,7 +49,7 @@ set(CINCH_HEADER_SUFFIXES "\\.h")
 # Add options for runtime selection
 #------------------------------------------------------------------------------#
 
-set(FLECSI_RUNTIME_MODELS serial mpilegion legion mpi)
+set(FLECSI_RUNTIME_MODELS serial legion mpi)
 
 if(NOT FLECSI_RUNTIME_MODEL)
   list(GET FLECSI_RUNTIME_MODELS 0 FLECSI_RUNTIME_MODEL)

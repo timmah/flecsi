@@ -12,20 +12,27 @@
 # All rights reserved
 #~----------------------------------------------------------------------------~#
 
+#------------------------------------------------------------------------------#
+# Add header files. Note that these will be "exported" to the parent
+# scope below.
+#------------------------------------------------------------------------------#
+
 set(execution_HEADERS
-	common/function_handle.h
-	common/launch.h
-	common/processor.h
-	common/task_hash.h
-	context.h
-	default_driver.h
-	execution.h
-	function.h
-	kernel.h
-	task.h
+  common/function_handle.h
+  common/launch.h
+  common/processor.h
+  common/task_hash.h
+  context.h
+  default_driver.h
+  execution.h
+  function.h
+  kernel.h
+  task.h
 )
 
 #------------------------------------------------------------------------------#
+# Runtime-specific files.
+#
 # UNIT_POLICY and RUNTIME_DRIVER are set for unit tests that are not
 # runtime specific and can be configured for whichever runtime is active.
 #------------------------------------------------------------------------------#
@@ -47,54 +54,54 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "legion")
   set(execution_HEADERS
     ${execution_HEADERS}
     legion/context_policy.h
-    legion/dpd.h
-    legion/future.h
     legion/execution_policy.h
+    legion/future.h
+    legion/helper.h
+    legion/internal_task.h
+    legion/legion_tasks.h
+    legion/mapper.h
+    legion/registration_wrapper.h
     legion/runtime_driver.h
     legion/task_args.h
     legion/task_wrapper.h
-    task_ids.h
-    PARENT_SCOPE
   )
 
   set(execution_SOURCES
-    legion/dpd.cc
+    ${execution_SOURCES}
+    legion/context_policy.cc
+    legion/legion_tasks.cc
   )
 
   set(UNIT_POLICY LEGION)
   set(RUNTIME_DRIVER legion/runtime_driver.cc)
 
-elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
+elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpi")
 
   set(execution_HEADERS
     ${execution_HEADERS}
-    legion/dpd.h
-    legion/task_args.h
-    legion/task_wrapper.h
-    mpilegion/context_policy.h
-    mpilegion/execution_policy.h
-    mpilegion/legion_handshake.h
-    mpilegion/mapper.h
-    mpilegion/mpi_legion_interop.h
-    mpilegion/runtime_driver.h
-    task_ids.h
-    mpilegion/init_partitions_task.h 
   )
 
   set(execution_SOURCES
-    legion/dpd.cc
-    mpilegion/init_partitions_task.cc
+    ${execution_SOURCES}
   )
 
-  set(UNIT_POLICY MPILEGION)
-  set(RUNTIME_DRIVER mpilegion/runtime_driver.cc)
+  set(UNIT_POLICY LEGION)
+  set(RUNTIME_DRIVER mpi/runtime_driver.cc)
 
 endif()
+
+#------------------------------------------------------------------------------#
+# Export header list to parent scope.
+#------------------------------------------------------------------------------#
 
 set(execution_HEADERS
   ${execution_HEADERS}
   PARENT_SCOPE
 )
+
+#------------------------------------------------------------------------------#
+# Export source list to parent scope.
+#------------------------------------------------------------------------------#
 
 set(execution_SOURCES
   ${execution_SOURCES}
@@ -104,94 +111,105 @@ set(execution_SOURCES
 #------------------------------------------------------------------------------#
 # Unit tests.
 #------------------------------------------------------------------------------#
+
+cinch_add_unit(launch
+  SOURCES
+    test/launch.cc
+  POLICY
+    SERIAL
+)
+
+cinch_add_unit(processor
+  SOURCES
+    test/processor.cc
+    ${RUNTIME_DRIVER}
+  POLICY
+    SERIAL
+  LIBRARIES
+    flecsi
+    ${CINCH_RUNTIME_LIBRARIES}
+)
+
+cinch_add_unit(task_hash
+  SOURCES
+    test/task_hash.cc
+  POLICY
+    SERIAL
+)
+
 if((NOT DEFINED ENV{TRAVIS} ) OR (FLECSI_RUNTIME_MODEL STREQUAL "serial")
-    OR (FLECSI_RUNTIME_MODEL STREQUAL "legion") )
-cinch_add_unit(task
-  SOURCES
-    test/task.cc
-    test/task_driver.h
-    ${RUNTIME_DRIVER}
-  DEFINES
-    FLECSI_DRIVER=flecsi/execution/test/task_driver.h
-    TEST_INIT=flecsi/execution/test/task_init.h
-  POLICY
-    ${UNIT_POLICY}
-  LIBRARIES
-    flecsi
-    ${CINCH_RUNTIME_LIBRARIES}
-)
+    OR (FLECSI_RUNTIME_MODEL STREQUAL "legion"))
 
-cinch_add_unit(simple_function
-  SOURCES
-    test/function.cc
-    test/simple_function.h
-    ${RUNTIME_DRIVER}
-  DEFINES
-    FLECSI_DRIVER=flecsi/execution/test/simple_function.h
-  POLICY
-    ${UNIT_POLICY}
-  LIBRARIES
-    flecsi
-    ${CINCH_RUNTIME_LIBRARIES}
-)
-endif()
+  #
+  # Test basic function calling capability using the register_function
+  # interface.
+  #
+  cinch_add_unit(simple_function
+    SOURCES
+      test/simple_function_driver.cc
+      test/context_runtime.cc
+      ${RUNTIME_DRIVER}
+    POLICY
+      ${UNIT_POLICY}
+    LIBRARIES
+      flecsi
+      ${CINCH_RUNTIME_LIBRARIES}
+  )
 
-if(NOT DEFINED ENV{TRAVIS})
-  if(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
+  #
+  # Test basic task calling capability using the register_task
+  # interface.
+  #
+  cinch_add_unit(simple_task
+    SOURCES
+      test/simple_task_driver.cc
+      test/context_runtime.cc
+      ${RUNTIME_DRIVER}
+    POLICY
+      ${UNIT_POLICY}
+    LIBRARIES
+      flecsi
+      ${CINCH_RUNTIME_LIBRARIES}
+  )
 
-    cinch_add_unit(mpilegion_task
-      SOURCES
-        test/task.cc
-        test/task_driver.h
-        mpilegion/runtime_driver.cc
-        mpilegion/init_partitions_task.cc
-        legion/dpd.cc
-      DEFINES
-        FLECSI_DRIVER=flecsi/execution/test/task_driver.h
-        TEST_INIT=flecsi/execution/test/task_init.h
-      POLICY MPILEGION
-      LIBRARIES
+  if(FLECSI_RUNTIME_MODEL STREQUAL "legion")
+
+    #
+    # Test internal legion task registration.
+    #
+    cinch_add_unit(internal_task
+    SOURCES
+      test/legion/internal_task_driver.cc
+      test/context_runtime.cc
+      ${RUNTIME_DRIVER}
+    POLICY
+      ${UNIT_POLICY}
+    LIBRARIES
       flecsi
       ${CINCH_RUNTIME_LIBRARIES}
     )
 
-#  cinch_add_unit(dpd_sparse
-#    SOURCES
-#      test/dpd_sparse.cc
-#      legion/dpd.cc
-#    POLICY
-#      MPILEGION
-#   THREADS 2
-#  )
-
-  # FIXME: Need to talk about this with Irina and Galen.
-    cinch_add_unit(test_legion_handshake
-      SOURCES test/mpilegion/test_legion_handshake.cc
-      POLICY MPILEGION
-    )
-
-    cinch_add_unit(test_mpilegion_interop
-      SOURCES test/mpilegion/test_mpi_legion_interop.cc
-      POLICY MPILEGION
-    )
-
     if(ENABLE_PARTITIONING AND ENABLE_PARMETIS)
-      cinch_add_unit(mpilegion_sprint
+
+      cinch_add_unit(execution_structure
         SOURCES
-          test/task.cc
-              test/mpilegion/sprint.h
-          mpilegion/runtime_driver.cc
-          mpilegion/init_partitions_task.cc
-          legion/dpd.cc
+          test/execution_structure_test.cc
+          test/execution_structure_drivers.cc
+          test/context_runtime.cc
+          ${RUNTIME_DRIVER}
         INPUTS
-              test/mpilegion/simple2d-8x8.msh
-        DEFINES SPRINT_TEST
-          FLECSI_DRIVER=flecsi/execution/test/sprint.h
-          TEST_INIT=flecsi/execution/test/task_init.h
-        LIBRARIES ${PARTITION_LIBRARIES}
-        POLICY MPILEGION
+          test/simple2d-8x8.msh
+          test/simple2d-16x16.msh
+        LIBRARIES
+          flecsi
+          ${CINCH_RUNTIME_LIBRARIES}
+          ${PARTITION_LIBRARIES}
+        DEFINES
+          -DFLECSI_ENABLE_SPECIALIZATION_DRIVER
+        POLICY LEGION
         THREADS 2
       )
+
     endif()
 
   endif()

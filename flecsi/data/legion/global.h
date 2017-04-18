@@ -96,6 +96,16 @@ struct global_accessor_t {
     return data_ != nullptr;
   } // operator bool
 
+  ///
+  // \brief Return a std::string containing the label of the data variable
+  //        reference by this accessor.
+  ///
+  const std::string &
+  label() const
+  {
+    return label_;
+  } // label
+
 private:
 
   std::string label_ = "";
@@ -160,7 +170,7 @@ struct storage_type_t<global, DS, MD> {
   register_data(
     const data_client_t & data_client,
     data_store_t & data_store,
-    const utils:const_string_t & key,
+    const utils::const_string_t & key,
     size_t versions,
     Args && ... args
   )
@@ -184,7 +194,7 @@ struct storage_type_t<global, DS, MD> {
   get_accessor(
     const data_client_t & data_client,
     data_store_t & data_store,
-    const utils:const_string_t & key,
+    const utils::const_string_t & key,
     size_t version
   )
   {
@@ -207,11 +217,90 @@ struct storage_type_t<global, DS, MD> {
   get_handle(
     const data_client_t & data_client,
     data_store_t & data_store,
-    const utils:const_string_t & key
+    const utils::const_string_t & key
   )
   {
     return {};
   } // get_handle
+
+
+  ///
+  /// FIXME documentation
+  ///
+  template<
+    typename T,
+    size_t NS,
+    typename Predicate
+  >
+  static
+  std::vector<accessor_t<T>>
+  get_handles(
+    const data_client_t & data_client,
+    data_store_t & data_store,
+    size_t version,
+    Predicate && predicate,
+    bool sorted
+  )
+  {
+
+  }
+
+  ///
+  /// FIXME documentation
+  ///
+  template<
+    typename T,
+    typename Predicate
+  >
+  static
+  std::vector<accessor_t<T>>
+  get_handles(
+    const data_client_t & data_client,
+    data_store_t & data_store,
+    size_t version,
+    Predicate && predicate,
+    bool sorted
+  )
+  {
+
+  }
+
+  ///
+  /// FIXME documentation
+  ///
+  template<
+    typename T,
+    size_t NS
+  >
+  static
+  std::vector<accessor_t<T>>
+  get_handles(
+    const data_client_t & data_client,
+    data_store_t & data_store,
+    size_t version,
+    bool sorted
+  )
+  {
+
+  }
+
+  ///
+  /// FIXME documentation
+  ///
+  template<
+    typename T
+  >
+  static
+  std::vector<accessor_t<T>>
+  get_handles(
+    const data_client_t & data_client,
+    data_store_t & data_store,
+    size_t version,
+    bool sorted
+  )
+  {
+
+  }
 
 }; // struct storage_type_t
 

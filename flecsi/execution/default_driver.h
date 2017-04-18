@@ -6,12 +6,9 @@
 #ifndef flecsi_execution_default_driver_h
 #define flecsi_execution_default_driver_h
 
-#include <iostream>
-
 ///
-// \file default_driver.h
-// \authors bergen
-// \date Initial file creation: Jul 24, 2016
+/// \file
+/// \date Initial file creation: Jul 24, 2016
 ///
 
 namespace flecsi {
@@ -22,12 +19,6 @@ namespace execution {
 //----------------------------------------------------------------------------//
 
 void driver(int argc, char ** argv) {
-
-  std::cout << "Warning: You are executing the default driver!" << std::endl;
-  std::cout <<
-    "This driver has no functionality except as a place holder..." <<
-    std::endl;
-
 } // driver
 
 } // namespace execution

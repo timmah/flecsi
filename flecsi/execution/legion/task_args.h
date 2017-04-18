@@ -12,17 +12,17 @@
 #include "flecsi/utils/common.h"
 
 ///
-// \file legion/task_args.h
-// \authors bergen
-// \date Initial file creation: Jul 24, 2016
+/// \file legion/task_args.h
+/// \authors bergen
+/// \date Initial file creation: Jul 24, 2016
 ///
 
 namespace flecsi {
 namespace execution {
 
 ///
-// Argument type for wrapper task. This type is used to pass the
-// user task and arguments from the call site to the Legion runtime.
+/// Argument type for wrapper task. This type is used to pass the
+/// user task and arguments from the call site to the Legion runtime.
 ///
 template<
   typename R,
@@ -31,14 +31,14 @@ template<
 struct legion_task_args__
 {
   using user_task_handle_t = function_handle__<R, A>;
-  using user_task_args_t = A;
+  using args_t = A;
 
   legion_task_args__(user_task_handle_t & user_task_handle_,
-    user_task_args_t & user_args_)
+    args_t & user_args_)
     : user_task_handle(user_task_handle_), user_args(user_args_) {}
 
   user_task_handle_t user_task_handle;
-  user_task_args_t user_args;
+  args_t user_args;
 
 }; // struct legion_task_args__
 

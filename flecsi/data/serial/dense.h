@@ -24,6 +24,7 @@
 #undef POLICY_NAMESPACE
 //----------------------------------------------------------------------------//
 
+#include "flecsi/data/common/data_types.h"
 #include "flecsi/data/data_client.h"
 #include "flecsi/data/data_handle.h"
 #include "flecsi/utils/const_string.h"
@@ -37,6 +38,10 @@
 /// \date Initial file creation: Apr 7, 2016
 ///
 
+#define np(X)                                                            \
+ std::cout << __FILE__ << ":" << __LINE__ << ": " << __PRETTY_FUNCTION__ \
+           << ": " << #X << " = " << (X) << std::endl
+
 namespace flecsi {
 namespace data {
 namespace serial {
@@ -44,6 +49,21 @@ namespace serial {
 //+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=//
 // Helper type definitions.
 //+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=//
+
+//----------------------------------------------------------------------------//
+// Dense handle.
+//----------------------------------------------------------------------------//
+
+template<
+  typename T,
+  size_t EP,
+  size_t SP,
+  size_t GP
+>
+struct dense_handle_t : public data_handle__<T, EP, SP, GP>
+{
+  using type = T;
+}; // struct dense_handle_t
 
 //----------------------------------------------------------------------------//
 // Dense accessor.
@@ -122,6 +142,15 @@ struct dense_accessor_t
     user_attributes_(a.user_attributes_),
     index_space_(a.index_space_),
     is_(a.is_)
+  {}
+
+  template<size_t PS>
+  dense_accessor_t(
+    const dense_handle_t<T, PS> & h
+  )
+  :
+    data_(reinterpret_cast<T*>(h.data)),
+    size_(h.size)
   {}
 
   //--------------------------------------------------------------------------//
@@ -376,16 +405,6 @@ private:
 
 }; // struct dense_accessor_t
 
-//----------------------------------------------------------------------------//
-// Dense handle.
-//----------------------------------------------------------------------------//
-
-template<typename T>
-struct dense_handle_t : public data_handle_t
-{
-  using type = T;
-}; // struct dense_handle_t
-
 //+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=//
 // Main type definition.
 //+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=//
@@ -410,8 +429,10 @@ struct storage_type_t<dense, DS, MD>
   template<typename T>
   using accessor_t = dense_accessor_t<T, MD>;
 
-  template<typename T>
-  using handle_t = dense_handle_t<T>;
+  template<typename T, size_t PS>
+  using handle_t = dense_handle_t<T, PS>;
+
+  using st_t = storage_type_t<dense, DS, MD>;
 
   //--------------------------------------------------------------------------//
   // Data registration.
@@ -435,7 +456,7 @@ struct storage_type_t<dense, DS, MD>
     typename ... Args
   >
   static
-  handle_t<T>
+  handle_t<T, 0>
   register_data(
     const data_client_t & data_client,
     data_store_t & data_store,
@@ -514,7 +535,8 @@ struct storage_type_t<dense, DS, MD>
 
     data_store[NS][h].num_entries = 0;
 
-    return {};
+    handle_t<T, 0> handle;
+    return handle;
   } // register_data
 
   //--------------------------------------------------------------------------//
@@ -872,10 +894,11 @@ struct storage_type_t<dense, DS, MD>
   ///
   template<
     typename T,
-    size_t NS
+    size_t NS,
+    size_t PS
   >
   static
-  handle_t<T>
+  handle_t<T, PS>
   get_handle(
     const data_client_t & data_client,
     data_store_t & data_store,
@@ -883,7 +906,19 @@ struct storage_type_t<dense, DS, MD>
     size_t version
   )
   {
-    return {};
+    auto hash = key.hash() ^ data_client.runtime_id();
+    auto& m = data_store[NS];
+    auto search = m.find(hash);
+    assert(search != m.end() && "invalid hash");
+    auto& md = search->second;
+
+    assert(version < md.versions && "version out of range");
+
+    handle_t<T, PS> h;
+    h.data = &md.data[version][0];
+    h.size = md.size;
+
+    return h;
   } // get_handle
 
 }; // struct storage_type_t

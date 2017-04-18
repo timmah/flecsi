@@ -6,305 +6,309 @@
 #ifndef flecsi_execution_legion_task_wrapper_h
 #define flecsi_execution_legion_task_wrapper_h
 
+///
+/// \file
+/// \date Initial file creation: Apr 12, 2017
+///
+
+#include <cinchlog.h>
+#include <legion.h>
+#include <string>
+
+#include "flecsi/data/accessor.h"
 #include "flecsi/data/data_handle.h"
 #include "flecsi/execution/context.h"
+#include "flecsi/execution/common/processor.h"
+#include "flecsi/execution/common/launch.h"
+#include "flecsi/execution/legion/registration_wrapper.h"
 #include "flecsi/execution/legion/task_args.h"
-
-#if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion
-  #include "flecsi/execution/mpilegion/legion_handshake.h"
-#endif
-
 #include "flecsi/utils/common.h"
+#include "flecsi/utils/tuple_type_converter.h"
+#include "flecsi/utils/tuple_walker.h"
 
-///
-// \file legion/task_wrapper.h
-// \authors bergen
-// \date Initial file creation: Jul 24, 2016
-///
+clog_register_tag(wrapper);
 
 namespace flecsi {
 namespace execution {
 
+//----------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
+
+// This is called to walk the task args before the user task functions runs
+// once we have the corresponding physical regions
+struct handle_args_ : public utils::tuple_walker__<handle_args_>
+{
+  handle_args_(
+    Legion::Runtime* runtime_,
+    Legion::Context context_,
+    const std::vector<Legion::PhysicalRegion>& regions_
+  )
+  :
+		runtime(runtime_),
+  	context(context_),
+  	regions(regions_)
+	{
+	}
+
+  template<
+    typename T,
+    size_t EP,
+    size_t SP,
+    size_t GP
+  >
+  void handle(
+    data_handle__<T, EP, SP, GP> & h
+  )
+  {
+
+  } // handle
+
+  template<
+		typename T
+	>
+  static
+  typename std::enable_if_t<!std::is_base_of<data_handle_base, T>::value>
+  handle(T&)
+	{}
+
+  Legion::Runtime* runtime;
+  Legion::Context context;
+  const std::vector<Legion::PhysicalRegion>& regions;
+}; // struct handle_args_
+
+//----------------------------------------------------------------------------//
+// Pure Legion task registration.
+//----------------------------------------------------------------------------//
+
 ///
-// \brief
-//
-// \tparam P processor type
-// \tparam S single type task
-// \tparam I index type task
-// \tparam R task return type
-// \tparam As arguments
+/// Pure Legion task wrapper.
+///
+/// \tparam RETURN The return type of the task.
+/// \tparam TASK The legion task.
 ///
 template<
-  processor_t P,
-  bool S,
-  bool I,
-  typename R,
-  typename A
+  typename RETURN,
+  RETURN (*TASK)(
+    const Legion::Task *,
+    const std::vector<Legion::PhysicalRegion> &,
+    Legion::Context,
+    Legion::Runtime *
+  )
 >
-struct legion_task_wrapper__
+struct pure_task_wrapper__
 {
-  //
-  // Type definition for user task.
-  //
-  using task_args_t = legion_task_args__<R,A>;
-  using user_task_handle_t = typename task_args_t::user_task_handle_t;
-  using user_task_args_t = typename task_args_t::user_task_args_t;
-
-  using lr_runtime = LegionRuntime::HighLevel::HighLevelRuntime;
-  using lr_proc = LegionRuntime::HighLevel::Processor;
-  using task_id_t = LegionRuntime::HighLevel::TaskID;
-
-  //
-  // This defines a predicate function to pass to tuple_filter that
-  // will select all tuple elements after the first index, i.e., 0.
-  //
-  template<typename T>
-  using greater_than = std::conditional_t<(T()>0), std::true_type,
-    std::false_type>;
-
-  template<typename T>
-  using is_data_handle = std::is_base_of<data_handle_t,T>;
+  using task_id_t = Legion::TaskID;
 
   ///
-  // This function is called by the context singleton to do the actual
-  // registration of the task wrapper with the Legion runtime. The structure
-  // of the logic used is really just an object factory pattern.
+  /// Registration callback function for pure Legion tasks.
+  ///
+  /// \param tid The task id to assign to the task.
+  /// \param processor A valid Legion processor type.
+  /// \param launch A \ref launch_t with the launch parameters.
+  /// \param A std::string containing the task name.
   ///
   static
   void
-  register_task(
-    task_id_t tid
+  registration_callback(
+    task_id_t tid,
+    processor_type_t processor,
+    launch_t launch,
+    std::string & task_name
   )
   {
-    switch(P) {
-      case loc:
-        lr_runtime::register_legion_task<R, execute>(
-          tid, lr_proc::LOC_PROC, S, I);
+    {
+    clog_tag_guard(wrapper);
+    clog(info) << "Executing PURE registration callback (" <<
+      task_name << ")" << std::endl;
+    }
+
+		// Create configuration options using launch information provided
+		// by the user.
+    Legion::TaskConfigOptions config_options{ launch_leaf(launch),
+      launch_inner(launch), launch_idempotent(launch) };
+
+    switch(processor) {
+      case processor_type_t::loc:
+        {
+        clog_tag_guard(wrapper);
+        clog(info) << "Registering PURE loc task: " <<
+          task_name << std::endl << std::endl;
+        }
+        registration_wrapper__<RETURN, TASK>::register_task(
+          tid, Legion::Processor::LOC_PROC, launch_single(launch),
+          launch_index(launch), AUTO_GENERATE_ID, config_options,
+          task_name.c_str());
         break;
-      case toc:
-        lr_runtime::register_legion_task<R, execute>(
-          tid, lr_proc::TOC_PROC, S, I);
-        break;
-      case mpi:
+      case processor_type_t::toc:
+        {
+        clog_tag_guard(wrapper);
+        clog(info) << "Registering PURE loc task: " <<
+          task_name << std::endl << std::endl;
+        }
+        registration_wrapper__<RETURN, TASK>::register_task(
+          tid, Legion::Processor::TOC_PROC, launch_single(launch),
+          launch_index(launch), AUTO_GENERATE_ID, config_options,
+          task_name.c_str());
         break;
     } // switch
-  } // register_task
+  } // registration_callback
 
-  ///
-  // This method executes the user's task after processing the arguments
-  // from the Legion runtime.
-  ///
-  static R execute(const LegionRuntime::HighLevel::Task * task,
-    const std::vector<LegionRuntime::HighLevel::PhysicalRegion> & regions,
-    LegionRuntime::HighLevel::Context context,
-    LegionRuntime::HighLevel::HighLevelRuntime * runtime)
-  {
-    // Unpack task arguments
-    task_args_t & task_args = *(reinterpret_cast<task_args_t *>(task->args));
-    user_task_handle_t & user_task_handle = task_args.user_task_handle;
-    user_task_args_t & user_task_args = task_args.user_args;
+}; // struct pure_task_wrapper__
 
-    // Push the Legion state
-    context_t::instance().push_state(user_task_handle.key,
-      context, runtime, task, regions);
-
-#if 0
-    // FIXME: Working on processing data handles
-    // Somehow (???) we are going to have to interleave the processed
-    // data handle arguments back into the original slots...
-
-    // Get the data handle task arguments
-    auto data_args = tuple_filter_<is_data_handle, task_args_t>(task_args);
-    std::cout << "data_args size: " <<
-      std::tuple_size<decltype(data_args)>::value << std::endl;
-
-    utils::tuple_for_each(data_args, [&](auto & element) {
-      std::cout << "hello" << std::endl;
-    });
-
-    // Execute the user task
-    return tuple_function(user_task, user_args);
-#endif
-
-    auto retval = user_task_handle(
-      context_t::instance().function(user_task_handle.key),
-      user_task_args);
-
-    // Pop the Legion state
-    context_t::instance().pop_state(user_task_handle.key);
-    
-    return retval;
-  } // execute
-
-#if 0
-  static R execute_mpi(const LegionRuntime::HighLevel::Task * task,
-    const std::vector<LegionRuntime::HighLevel::PhysicalRegion>& regions,
-    LegionRuntime::HighLevel::Context context,
-    LegionRuntime::HighLevel::HighLevelRuntime * runtime)
-  {
-#ifdef LEGIONDEBUG
-     int rank;
-     MPI_Comm_rank( MPI_COMM_WORLD, &rank);
-     std::cout<<"MPI rank from the index task = " << rank <<std::endl;
-     ext_legion_handshake_t::instance().rank_=rank;
-#endif
-
-    task_args_t & task_args = *(reinterpret_cast<task_args_t *>(task->args));
-    user_task_handle_t & user_task_handle = task_args.user_task_handle;
-    user_task_args_t & user_task_args = task_args.user_args;
-
-    // Get the user task arguments
-//  auto user_args = tuple_filter_index_<greater_than, task_args_t>(task_args);
- 
-    auto bound_user_task = std::bind(reinterpret_cast<std::function<R(A)> *>(
-      context_t::instance().function(user_task_handle.key)), user_task_args);
-
-     ext_legion_handshake_t::instance().shared_func_ = bound_user_task;
-
-     ext_legion_handshake_t::instance().call_mpi_=true;
-  } // execute_mpi
-#endif
-
-}; // class legion_task_wrapper__
+//----------------------------------------------------------------------------//
+// User and MPI task registration.
+//----------------------------------------------------------------------------//
 
 ///
-// Partial specialization for void.
+/// Task wrapper.
+///
+/// \tparam RETURN The return type of the user task.
+/// \tparam ARG_TUPLE A std::tuple of the user task arguments.
+/// \tparam DELEGATE The delegate function that invokes the user task.
+/// \tparam KEY A hash key identifying the task.
 ///
 template<
-  processor_t P,
-  bool S,
-  bool I,
-  typename A
+  typename RETURN,
+  typename ARG_TUPLE,
+	RETURN (*DELEGATE)(ARG_TUPLE),
+	size_t KEY
 >
-struct legion_task_wrapper__<P, S, I, void, A>
+struct task_wrapper__
 {
-  //
-  // Type definition for user task.
-  //
-  using task_args_t = legion_task_args__<void,A>;
-  using user_task_handle_t = typename task_args_t::user_task_handle_t;
-  using user_task_args_t = typename task_args_t::user_task_args_t;
-
-  using lr_runtime = LegionRuntime::HighLevel::HighLevelRuntime;
-  using lr_proc = LegionRuntime::HighLevel::Processor;
-  using task_id_t = LegionRuntime::HighLevel::TaskID;
-
-  //
-  // This defines a predicate function to pass to tuple_filter that
-  // will select all tuple elements after the first index, i.e., 0.
-  //
-  template<typename T>
-  using greater_than = std::conditional_t<(T()>0), std::true_type,
-    std::false_type>;
-
-  template<typename T>
-  using is_data_handle = std::is_base_of<data_handle_t,T>;
+  using user_task_args_t =
+    typename utils::base_convert_tuple_type<
+		accessor_base, data_handle__<void, 0, 0, 0>, ARG_TUPLE>::type;
+  using task_id_t = Legion::TaskID;
 
   ///
-  // This function is called by the context singleton to do the actual
-  // registration of the task wrapper with the Legion runtime. The structure
-  // of the logic used is really just an object factory pattern.
+  /// Registration callback function for user tasks.
+  ///
+  /// \param tid The task id to assign to the task.
+  /// \param processor A valid Legion processor type.
+  /// \param launch A \ref launch_t with the launch parameters.
+  /// \param A std::string containing the task name.
   ///
   static
-  void
-  register_task(
-    task_id_t tid
+	void
+  registration_callback(
+    task_id_t tid,
+    processor_type_t processor,
+    launch_t launch,
+    std::string & task_name
   )
   {
-    switch(P) {
-      case loc:
-        lr_runtime::register_legion_task<execute>(
-          tid, lr_proc::LOC_PROC, S, I);
+    {
+    clog_tag_guard(wrapper);
+    clog(info) << "Executing registration callback (" <<
+      task_name << ")" << std::endl;
+    }
+
+		// Create configuration options using launch information provided
+		// by the user.
+    Legion::TaskConfigOptions config_options{ launch_leaf(launch),
+      launch_inner(launch), launch_idempotent(launch) };
+
+    switch(processor) {
+      case processor_type_t::loc:
+        {
+        clog_tag_guard(wrapper);
+        clog(info) << "Registering loc task: " <<
+          task_name << std::endl << std::endl;
+        }
+				registration_wrapper__<RETURN, execute_user_task>::register_task(
+          tid, Legion::Processor::LOC_PROC, launch_single(launch),
+          launch_index(launch), AUTO_GENERATE_ID, config_options,
+          task_name.c_str());
         break;
-      case toc:
-        lr_runtime::register_legion_task<execute>(
-          tid, lr_proc::TOC_PROC, S, I);
+      case processor_type_t::toc:
+        {
+        clog_tag_guard(wrapper);
+        clog(info) << "Registering toc task: " <<
+          task_name << std::endl << std::endl;
+        }
+        registration_wrapper__<RETURN, execute_user_task>::register_task(
+          tid, Legion::Processor::TOC_PROC, launch_single(launch),
+          launch_index(launch), AUTO_GENERATE_ID, config_options,
+          task_name.c_str());
         break;
-#if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion
-      case mpi:
-        lr_runtime::register_legion_task<execute_mpi>(
-          tid, lr_proc::LOC_PROC, S, I);
+      case processor_type_t::mpi:
+        {
+        clog_tag_guard(wrapper);
+        clog(info) << "Registering MPI task: " <<
+          task_name << std::endl << std::endl;
+        }
+        registration_wrapper__<void, execute_mpi_task>::register_task(
+          tid, Legion::Processor::LOC_PROC, launch_single(launch),
+          launch_index(launch), AUTO_GENERATE_ID, config_options,
+          task_name.c_str());
         break;
-#endif // FLECSI_RUNTIME_MODEL_mpilegion
     } // switch
-  } // register_task
+  } // registration_callback
 
   ///
-  // This method executes the user's task after processing the arguments
-  // from the Legion runtime.
+  /// Wrapper method for user tasks.
   ///
-  static void execute(const LegionRuntime::HighLevel::Task * task,
+  static RETURN execute_user_task(
+    const LegionRuntime::HighLevel::Task * task,
     const std::vector<LegionRuntime::HighLevel::PhysicalRegion> & regions,
     LegionRuntime::HighLevel::Context context,
-    LegionRuntime::HighLevel::HighLevelRuntime * runtime)
+    LegionRuntime::HighLevel::HighLevelRuntime * runtime
+  )
   {
+    {
+    clog_tag_guard(wrapper);
+    clog(info) << "In execute_user_task" << std::endl;
+    }
+
     // Unpack task arguments
-    task_args_t & task_args = *(reinterpret_cast<task_args_t *>(task->args));
-    user_task_handle_t & user_task_handle = task_args.user_task_handle;
-    user_task_args_t & user_task_args = task_args.user_args;
+    user_task_args_t & user_task_args =
+			*(reinterpret_cast<user_task_args_t *>(task->args));
 
     // Push the Legion state
-    context_t::instance().push_state(user_task_handle.key,
-      context, runtime, task, regions);
+    context_t::instance().push_state(KEY, context, runtime, task, regions);
 
-#if 0
-    // FIXME: Working on processing data handles
-    // Somehow (???) we are going to have to interleave the processed
-    // data handle arguments back into the original slots...
+    handle_args_ handle_args(runtime, context, regions);
+    handle_args.walk(user_task_args);
 
-    // Get the data handle task arguments
-    auto data_args = tuple_filter_<is_data_handle, task_args_t>(task_args);
-    std::cout << "data_args size: " <<
-      std::tuple_size<decltype(data_args)>::value << std::endl;
-
-    utils::tuple_for_each(data_args, [&](auto & element) {
-      std::cout << "hello" << std::endl;
-    });
-
-    // Execute the user task
-    return tuple_function(user_task, user_args);
-#endif
-
-    user_task_handle(context_t::instance().function(user_task_handle.key),
-      user_task_args);
+		// FIXME: NEED TO HANDLE RETURN TYPES
+		// Execute the user's task
+		(*DELEGATE)(user_task_args);
 
     // Pop the Legion state
-    context_t::instance().pop_state(user_task_handle.key);
-  } // execute
+    context_t::instance().pop_state(KEY);
 
-#if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion
-  static void execute_mpi(const LegionRuntime::HighLevel::Task * task,
-    const std::vector<LegionRuntime::HighLevel::PhysicalRegion>& regions,
+		// FIXME: NEED TO HANDLE RETURN TYPES
+  } // execute_user_task
+
+  ///
+  /// Wrapper method for MPI tasks.
+  ///
+  static void execute_mpi_task(
+    const LegionRuntime::HighLevel::Task * task,
+    const std::vector<LegionRuntime::HighLevel::PhysicalRegion> & regions,
     LegionRuntime::HighLevel::Context context,
-    LegionRuntime::HighLevel::HighLevelRuntime * runtime)
+    LegionRuntime::HighLevel::HighLevelRuntime * runtime
+  )
   {
-#ifdef LEGIONDEBUG
-     int rank;
-     MPI_Comm_rank( MPI_COMM_WORLD, &rank);
-     std::cout<<"MPI rank from the index task = " << rank <<std::endl;
-     ext_legion_handshake_t::instance().rank_=rank;
-#endif
+    {
+    clog_tag_guard(wrapper);
+    clog(info) << "In execute_mpi_task" << std::endl;
+    }
 
-    task_args_t & task_args = *(reinterpret_cast<task_args_t *>(task->args));
-    user_task_handle_t & user_task_handle = task_args.user_task_handle;
-    user_task_args_t & user_task_args = task_args.user_args;
+    // Unpack task arguments.
+    ARG_TUPLE & mpi_task_args = *(reinterpret_cast<ARG_TUPLE *>(task->args));
 
-    // Get the user task arguments
-//  auto user_args = tuple_filter_index_<greater_than, task_args_t>(task_args);
- 
-    std::function<void()> bound_user_task =
-      std::bind(*reinterpret_cast<std::function<void(A)> *>(
-      context_t::instance().function(user_task_handle.key)), user_task_args);
+    // Create bound function to pass to MPI runtime.
+    std::function<void()> bound_mpi_task = std::bind(DELEGATE, mpi_task_args);
 
-     ext_legion_handshake_t::instance().shared_func_ = bound_user_task;
+    // Set the MPI function and make the runtime active.
+		context_t::instance().set_mpi_task(bound_mpi_task);
+		context_t::instance().set_mpi_state(true);
+  } // execute_mpi_task
 
-     ext_legion_handshake_t::instance().call_mpi_=true;
-  } // execute_mpi
-#endif // FLECSI_RUNTIME_MODEL_mpilegion
+}; // struct task_wrapper__
 
-}; // class legion_task_wrapper__
-
-} //namespace execution 
+} // namespace execution
 } // namespace flecsi
 
 #endif // flecsi_execution_legion_task_wrapper_h

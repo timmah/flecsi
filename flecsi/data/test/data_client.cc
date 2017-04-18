@@ -7,6 +7,7 @@
 
 #include <unordered_map>
 
+#include "flecsi/execution/default_driver.h"
 #include "flecsi/data/data_client.h"
 #include "flecsi/data/data.h"
 
@@ -15,13 +16,19 @@ using namespace flecsi::data;
 
 static const size_t N = 100000;
 
+// Create a derived type so that we can instantiate a data_client_t.
+struct derived_t : public data_client_t
+{
+  derived_t() : data_client_t() {}
+}; // derived_t
+
 TEST(data_client, sanity) {
 
   // Map to store runtime ids.
   std::unordered_map<uintptr_t, int> map;
 
   // Array of data client
-  data_client_t dc[N];
+  derived_t dc[N];
 
   for(size_t i(0); i<N; ++i) {
 
@@ -44,14 +51,14 @@ TEST(data_client, sanity) {
 TEST(data_client, destructor) {
 
   // create a new data_client
-  auto dc = new data_client_t;
+  auto dc = new derived_t;
 
   // Register data
-  register_data(*dc, hydro, pressure, double, global, 1);
-  register_data(*dc, hydro, density, double, global, 1);
+  flecsi_register_data(*dc, hydro, pressure, double, global, 1);
+  flecsi_register_data(*dc, hydro, density, double, global, 1);
 
   // get all accessors to the data
-  auto accs = get_accessors(*dc, hydro, double, global, 0);
+  auto accs = flecsi_get_handles(*dc, hydro, double, global, 0);
   
   ASSERT_EQ( accs.size(), 2 );
   ASSERT_EQ( accs[0].label(), "density" );
@@ -59,6 +66,8 @@ TEST(data_client, destructor) {
 
   // store the runtime id
   auto rid = dc->runtime_id();
+
+  ASSERT_EQ( flecsi::data::storage_t::instance().count(rid), 2);
 
   // delete the data_client
   delete dc;
@@ -72,16 +81,16 @@ TEST(data_client, destructor) {
 TEST(data_client, move) {
 
   // create new data_clients
-  data_client_t dc1, dc2;
+  derived_t dc1, dc2;
   auto rid1 = dc1.runtime_id();
 
   // Register data
-  register_data(dc1, hydro, pressure, double, global, 1);
-  register_data(dc1, hydro, density, double, global, 1);
+  flecsi_register_data(dc1, hydro, pressure, double, global, 1);
+  flecsi_register_data(dc1, hydro, density, double, global, 1);
 
   // get all accessors to the data
   {
-    auto accs = get_accessors(dc1, hydro, double, global, 0);
+    auto accs = flecsi_get_handles(dc1, hydro, double, global, 0);
   
     ASSERT_EQ( accs.size(), 2 );
     ASSERT_EQ( accs[0].label(), "density" );
@@ -97,7 +106,7 @@ TEST(data_client, move) {
 
   // it should show up in the new data client though
   {
-    auto accs = get_accessors(dc2, hydro, double, global, 0);
+    auto accs = flecsi_get_handles(dc2, hydro, double, global, 0);
   
     ASSERT_EQ( accs.size(), 2 );
     ASSERT_EQ( accs[0].label(), "density" );

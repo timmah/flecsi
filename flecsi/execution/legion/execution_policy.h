@@ -15,9 +15,17 @@
 #ifndef flecsi_execution_legion_execution_policy_h
 #define flecsi_execution_legion_execution_policy_h
 
+///
+/// \file legion/execution_policy.h
+/// \authors bergen
+/// \date Initial file creation: Nov 15, 2015
+///
+
 #include <functional>
 #include <memory>
+#include <type_traits>
 
+#include <cinchlog.h>
 #include <legion.h>
 
 #include "flecsi/execution/common/processor.h"
@@ -27,155 +35,347 @@
 #include "flecsi/execution/legion/future.h"
 #include "flecsi/execution/legion/task_wrapper.h"
 #include "flecsi/utils/const_string.h"
+#include "flecsi/utils/tuple_walker.h"
+#include "flecsi/data/data_handle.h"
 
-///
-// \file legion/execution_policy.h
-// \authors bergen
-// \date Initial file creation: Nov 15, 2015
-///
+clog_register_tag(execution);
 
 namespace flecsi {
 namespace execution {
+
+// This is called to walk the task args before the task launcher
+// is created for the purposes of gathering region requirements and
+// setting any state on the data handle BEFORE Legion gets the task
+// args tuple to be serialized.
+struct init_args_ : public utils::tuple_walker__<init_args_>{
+  init_args_(
+    Legion::Runtime* runtime,
+    Legion::Context context
+  )
+  : runtime(runtime),
+  context(context){}
+
+  template<
+    typename T,
+    size_t EP,
+    size_t SP,
+    size_t GP
+  >
+  void
+  handle(
+    data_handle__<T, EP, SP, GP>& h
+  )
+  {
+
+  }
+
+  template<typename T>
+  static
+  typename std::enable_if_t<!std::is_base_of<data_handle_base, T>::
+    value>
+  handle(
+    T&
+  ){}
+
+  Legion::Runtime* runtime;
+  Legion::Context context;
+  std::vector<Legion::RegionRequirement> reqs;
+};
+
+// This is called to walk the task args after the task launcher
+// is created but before the task runs for the purposes of 
+// handling synchronization
+struct task_prolog_ : public utils::tuple_walker__<task_prolog_>{
+  task_prolog_(
+    Legion::Runtime* runtime,
+    Legion::Context context,
+    Legion::TaskLauncher& launcher
+  )
+  : runtime(runtime),
+  context(context),
+  launcher(launcher){}
+
+  template<
+    typename T,
+    size_t EP,
+    size_t SP,
+    size_t GP
+  >
+  void
+  handle(
+    data_handle__<T, EP, SP, GP>& h
+  )
+  {
+  
+  }
+
+  template<
+    typename T
+  >
+  static
+  typename std::enable_if_t<!std::is_base_of<data_handle_base, T>::value>
+  handle(
+    T&
+  )
+  {
+
+  }
+
+  Legion::Runtime* runtime;
+  Legion::Context context;
+  Legion::TaskLauncher& launcher;
+};
+
+// This is called to walk the task args after the task has run 
+// for the purpose of handling synchronization
+struct task_epilog_ : public utils::tuple_walker__<task_epilog_>{
+  task_epilog_(
+    Legion::Runtime* runtime,
+    Legion::Context context
+  )
+  : runtime(runtime),
+  context(context){}
+
+  template<
+    typename T,
+    size_t EP,
+    size_t SP,
+    size_t GP
+  >
+  void handle(
+    data_handle__<T, EP, SP, GP>& h
+  ){
+  
+  }
+
+  template<typename T>
+  static
+  typename std::enable_if_t<!std::is_base_of<data_handle_base, T>::
+    value>
+  handle(T&){}
+
+  Legion::Runtime* runtime;
+  Legion::Context context;
+};
 
 //----------------------------------------------------------------------------//
 // Execution policy.
 //----------------------------------------------------------------------------//
 
 ///
-// \struct legion_execution_policy legion_execution_policy.h
-// \brief legion_execution_policy provides...
+/// \struct legion_execution_policy legion_execution_policy.h
+/// \brief legion_execution_policy provides...
 ///
 struct legion_execution_policy_t
 {
-  template<typename R>
-  using future__ = legion_future__<R>;
+  template<typename RETURN>
+  /// future
+  using future__ = legion_future__<RETURN>;
 
   //--------------------------------------------------------------------------//
   // Task interface.
   //--------------------------------------------------------------------------//
 
-  // FIXME: add task type (leaf, inner, etc...)
+  /// User task registration.
   template<
-    typename R,
-    typename A
+    typename RETURN,
+    typename ARG_TUPLE,
+    RETURN (*DELEGATE)(ARG_TUPLE),
+    size_t KEY
   >
   static
   bool
   register_task(
-    task_hash_key_t key
+    task_hash_key_t key,
+    std::string task_name
   )
   {
-    switch(key.processor()) {
+    // Processor type can be an or-list of values, each of which should
+    // be register as a different variant.
+    const processor_t processor = key.processor();
 
-      case loc:
-      {
-        switch(key.launch()) {
+    using wrapper_t = task_wrapper__<RETURN, ARG_TUPLE, DELEGATE, KEY>;
 
-          case single:
-          {
-            return context_t::instance().register_task(key,
-              legion_task_wrapper__<loc, 1, 0, R, A>::register_task);
-          } // single
+    // Register mpi task variant
+    if(processor_mpi(processor)) {
+      if(!context_t::instance().register_task(
+        key, processor_type_t::mpi, task_name,
+        wrapper_t::registration_callback)) {
+        clog(fatal) << "mpi callback registration failed" << std::endl;
+      } // if
+    }
+    else {
+      // Register loc task variant
+      if(processor_loc(processor)) {
+        if(!context_t::instance().register_task(
+          key, processor_type_t::loc, task_name,
+          wrapper_t::registration_callback)) {
+          clog(fatal) << "loc callback registration failed" << std::endl;
+        } // if
+      } // if
 
-          case index:
-          {
-            return context_t::instance().register_task(key,
-              legion_task_wrapper__<loc, 0, 1, R, A>::register_task);
-          } // index
+      // Register loc task variant
+      if(processor_loc(processor)) {
+        if(!context_t::instance().register_task(
+          key, processor_type_t::toc, task_name,
+          wrapper_t::registration_callback)) {
+          clog(fatal) << "toc callback registration failed" << std::endl;
+        } // if
+      } // if
+    } // if
 
-          case any:
-          {
-            return context_t::instance().register_task(key,
-              legion_task_wrapper__<loc, 1, 1, R, A>::register_task);
-          } // any
-
-        } // switch
-      } // loc
-
-      case toc:
-      {
-        switch(key.launch()) {
-
-          case single:
-          {
-            return context_t::instance().register_task(key,
-              legion_task_wrapper__<toc, 1, 0, R, A>::register_task);
-          } // single
-
-          case index:
-          {
-            return context_t::instance().register_task(key,
-              legion_task_wrapper__<toc, 0, 1, R, A>::register_task);
-          } // index
-
-          case any:
-          {
-            return context_t::instance().register_task(key,
-              legion_task_wrapper__<toc, 1, 1, R, A>::register_task);
-          } // any
-
-        } // switch
-      } // toc
-
-      default:
-        throw std::runtime_error("unsupported processor type");
-    } // switch
-
+    return true;
   } // register_task
 
+  /// Legion task registration.
+  template<
+    typename RETURN,
+    RETURN (*TASK)(
+      const Legion::Task *,
+      const std::vector<Legion::PhysicalRegion> &,
+      Legion::Context,
+      Legion::Runtime *
+    )
+  >
+  static
+  bool
+  register_legion_task(
+    task_hash_key_t key,
+    std::string task_name
+  )
+  {
+    // Processor type can be an or-list of values, each of which should
+    // be register as a different variant.
+    const processor_t processor = key.processor();
+
+    // Register loc task variant
+    if(processor_loc(processor)) {
+      if(!context_t::instance().register_task(
+        key, processor_type_t::loc, task_name,
+        pure_task_wrapper__<RETURN, TASK>::registration_callback)) {
+        clog(fatal) << "pure loc callback registration failed" << std::endl;
+      } // if
+    } // if
+
+    // Register toc task variant
+    if(processor_toc(processor)) {
+      if(!context_t::instance().register_task(
+        key, processor_type_t::toc, task_name,
+        pure_task_wrapper__<RETURN, TASK>::registration_callback)) {
+        clog(fatal) << "pure toc callback registration failed" << std::endl;
+      } // if
+    } // if
+
+    return true;
+  } // register_legion_task
+
   ///
-  // \tparam R The task return type.
-  // \tparam T The user task type.
-  // \tparam FIXME: A
-  //
-  // \param key
-  // \param user_task_handle
-  // \param args
+  /// Execute FLeCSI task.
+  ///
+  /// \tparam RETURN The task return type.
+  /// \tparam FIXME: A
+  ///
+  /// \param key
+  /// \param parent
+  /// \param args
   ///
   template<
-    typename R,
-    typename T,
-    typename...As
+    typename RETURN,
+    typename ... ARGS
   >
   static
   decltype(auto)
   execute_task(
     task_hash_key_t key,
     size_t parent,
-    T user_task_handle,
-    As && ... user_task_args
+    ARGS && ... args
   )
   {
     using namespace Legion;
 
+    // Make a tuple from the task arguments.
+    auto user_task_args = std::make_tuple(args ...);
+    using user_task_args_t = decltype(user_task_args);
+
+    // Get the runtime and context from the calling task.
     context_t & context_ = context_t::instance();
+    auto legion_runtime = context_.runtime(parent);
+    auto legion_context = context_.context(parent);
 
-    auto user_task_args_tuple = std::make_tuple(user_task_args...);
-    using user_task_args_tuple_t = decltype( user_task_args_tuple );
-
-    using task_args_t = legion_task_args__<R, user_task_args_tuple_t>;
-
-    // We can't use std::forward or && references here because
-    // the calling state is not guarunteed to exist when the
-    // task is invoked, i.e., we have to use copies...
-    task_args_t task_args(user_task_handle, user_task_args_tuple);
-
-    // Switch on launch type: single or index.
-    switch(key.launch()) {
-
-      case single:
+    // Handle MPI and Legion invocations separately.
+    if(processor_mpi(key.processor())) {
       {
-        TaskLauncher task_launcher(context_.task_id(key),
-          TaskArgument(&task_args, sizeof(task_args_t)));
+      clog_tag_guard(execution);
+      clog(info) << "Executing MPI task: " << key << std::endl;
+      }
 
+      ArgumentMap arg_map;
+      IndexLauncher launcher(
+        context_.task_id(key),
+        Legion::Domain::from_rect<1>(context_.all_processes()),
+        TaskArgument(&user_task_args, sizeof(user_task_args_t)),
+        arg_map
+      );
+
+      // Enqueue the MPI task.
+      auto future =
+        legion_runtime->execute_index_space(legion_context, launcher);
+      future.wait_all_results();
+
+      // Handoff to the MPI runtime.
+      context_.handoff_to_mpi(legion_context, legion_runtime);
+
+      // Wait for MPI to finish execution (synchronous).
+      context_.wait_on_mpi(legion_context, legion_runtime);
+      
+      // Reset the calling state to false.
+      context_.unset_call_mpi(legion_context, legion_runtime);
+
+      return legion_future__<RETURN>(future);
+    }
+    else {
+      // Initialize the arguments to pass through the runtime.
+      init_args_ init_args(legion_runtime, legion_context);
+      init_args.walk(user_task_args);
+
+      const launch_t launch = key.launch();
+
+      // Switch on launch type: single or index.
+      if(launch_single(launch)) {
+        {
+        clog_tag_guard(execution);
+        clog(info) << "Executing single task: " << key << std::endl;
+        }
+
+        // Create a task launcher, passing the task arguments.
+        TaskLauncher task_launcher(context_.task_id(key),
+          TaskArgument(&user_task_args, sizeof(user_task_args_t)));
+
+        // Enqueue the prolog.
+        task_prolog_
+          task_prolog(legion_runtime, legion_context, task_launcher);
+        task_prolog.walk(user_task_args);
+
+        // Enqueue the task.
         auto future = context_.runtime(parent)->execute_task(
           context_.context(parent), task_launcher);
 
-        return legion_future__<R>(future);
-      } // single
+        // Enqueue the epilog.
+        task_epilog_
+          task_epilog(legion_runtime, legion_context);
+        task_epilog.walk(user_task_args);
 
-      case index:
-      {
+        return legion_future__<RETURN>(future);
+      }
+      else if(launch_index(launch)) {
+        {
+        clog_tag_guard(execution);
+        clog(info) << "Executing index task: " << key << std::endl;
+        }
+
+        // FIXME:
+        // FIXME: This looks incomplete!
+        // FIXME:
         //FIXME: get launch domain from partitioning of the data used in
         // the task following launch domeing calculation is temporary:
         LegionRuntime::Arrays::Rect<1> launch_bounds(
@@ -185,22 +385,19 @@ struct legion_execution_policy_t
 
         LegionRuntime::HighLevel::ArgumentMap arg_map;
         LegionRuntime::HighLevel::IndexLauncher index_launcher(
-          context_.task_id(key), launch_domain, TaskArgument(&task_args,
-          sizeof(task_args_t)), arg_map);
+          context_.task_id(key), launch_domain,
+          TaskArgument(&user_task_args, sizeof(user_task_args_t)), arg_map);
 
+        // Enqueue the task.
         auto future = context_.runtime(parent)->execute_index_space(
           context_.context(parent), index_launcher);
 
-        return legion_future__<R>(future);
-      } // index
-        
-      default:
-      {
-        throw std::runtime_error("the task can be executed \
-                    only as single or index task");
+        return legion_future__<RETURN>(future);
       }
-
-    } // switch
+      else {
+        clog(fatal) << "unsupported task type" << std::endl;
+      } // if
+    } // if
   } // execute_task
 
   //--------------------------------------------------------------------------//
@@ -208,51 +405,51 @@ struct legion_execution_policy_t
   //--------------------------------------------------------------------------//
 
   ///
-  // This method registers a user function with the current
-  // execution context.
-  //
-  // \param key The function identifier.
-  // \param user_function A reference to the user function as a std::function.
-  //
-  // \return A boolean value indicating whether or not the function was
-  //         successfully registered.
+  /// This method registers a user function with the current
+  /// execution context.
+  ///
+  /// \param key The function identifier.
+  /// \param user_function A reference to the user function as a std::function.
+  ///
+  /// \return A boolean value indicating whether or not the function was
+  ///         successfully registered.
   ///
   template<
-    typename R,
-    typename ... As
+    typename RETURN,
+    typename ... ARGS
   >
   static
   bool
   register_function(
     const utils::const_string_t & key,
-    std::function<R(As ...)> & user_function
+    std::function<RETURN(ARGS ...)> & user_function
   )
   {
     return context_t::instance().register_function(key, user_function);
   } // register_function
 
   ///
-  // This method looks up a function from the \e handle argument
-  // and executes the associated it with the provided \e args arguments.
-  //
-  // \param handle The function handle to execute.
-  // \param args A variadic argument list of the function parameters.
-  //
-  // \return The return type of the provided function handle.
+  /// This method looks up a function from the \e handle argument
+  /// and executes the associated it with the provided \e args arguments.
+  ///
+  /// \param handle The function handle to execute.
+  /// \param args A variadic argument list of the function parameters.
+  ///
+  /// \return The return type of the provided function handle.
   ///
   template<
-    typename T,
-    typename ... As
+    typename FUNCTION_HANDLE,
+    typename ... ARGS
   >
   static
   decltype(auto)
   execute_function(
-    T & handle,
-    As && ... args
+    FUNCTION_HANDLE & handle,
+    ARGS && ... args
   )
   {
     auto t = std::make_tuple(args ...);
-    return handle(context_t::instance().function(handle.key), t);
+    return handle(context_t::instance().function(handle.key()), t);
   } // execute_function
 
 }; // struct legion_execution_policy_t

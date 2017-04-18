@@ -6,14 +6,13 @@
 #ifndef flecsi_data_client_h
 #define flecsi_data_client_h
 
-#include "flecsi/utils/common.h"
-#include "flecsi/data/data_constants.h"
-  
 ///
 /// \file
 /// \date Initial file creation: Mar 23, 2016
 ///
 
+#include "flecsi/utils/common.h"
+ 
 namespace flecsi {
 namespace data {
 
@@ -25,9 +24,6 @@ class data_client_t
 {
 public:
 
-  /// Default constructor
-  data_client_t() : id_(utils::unique_id_t<size_t>::instance().next()) {}
-
   /// Copy constructor (disabled)
   data_client_t(const data_client_t &) = delete;
 
@@ -35,13 +31,10 @@ public:
   data_client_t & operator = (const data_client_t &) = delete;
 
   /// Allow move construction
-  data_client_t(data_client_t && o);
+  data_client_t(data_client_t && dc);
 
-  /// Allow move construction
-  data_client_t & operator=(data_client_t && o);
-
-  /// Destructor
-  virtual ~data_client_t();
+  /// Allow move assignment
+  data_client_t & operator = (data_client_t && dc);
 
   ///
   /// Return a unique runtime identifier for namespace access to the
@@ -53,18 +46,29 @@ public:
     return (reinterpret_cast<uintptr_t>(this) << 4) ^ id_;
   } // runtime_id
 
-  // FIXME: This needs to be made pure virtual
-  // The current virtual implementation is here to avoid
-  // breaking the old data model.
-  //virtual size_t indices(size_t index_space) = 0;
-  virtual
-  size_t
-  indices(
-    size_t index_space
-  ) const
-  {
-    return 0;
-  } // indices
+  virtual ~data_client_t() { reset(); }
+
+protected:
+
+  void reset();
+
+  ///
+  /// Define a dummy type so that we get our own counter below.
+  ///
+  struct id_t {};
+
+  ///
+  /// Default constructor.
+  ///
+  /// \note This is protected so that the class cannot be instantiated
+  ///       directly. Normally, this would be accomplished by including
+  ///       a pure-virtual function. However, this doesn't make sense
+  ///       for this type, as the runtime_id method doesn't need to
+  ///       be overridden by derived types.
+  data_client_t()
+  :
+    id_(utils::unique_id_t<id_t>::instance().next())
+  {}
 
 private:
 

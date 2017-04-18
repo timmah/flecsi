@@ -7,9 +7,8 @@
 #define flecsi_runtime_execution_policy_h
 
 ///
-// \file flecsi_runtime_policy.h
-// \authors bergen
-// \date Initial file creation: Aug 01, 2016
+/// \file
+/// \date Initial file creation: Aug 01, 2016
 ///
 
 ///
@@ -31,8 +30,8 @@
 
   using flecsi_execution_policy_t = serial_execution_policy_t;
 
-  }
-  }
+  } // namespace execution
+  } // namespace flecsi
 
 // Legion Policy
 #elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_legion
@@ -44,23 +43,10 @@
 
   using flecsi_execution_policy_t = legion_execution_policy_t;
 
-  }
-  }
+  } // namespace execution
+  } // namespace flecsi
 
-// MPI+Legion Policy
-#elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion
-
-  #include "flecsi/execution/mpilegion/execution_policy.h"
-
-  namespace flecsi {
-  namespace execution {
-
-  using flecsi_execution_policy_t = mpilegion_execution_policy_t;
-
-  }
-  }
-
-// MPI+Legion Policy
+// MPI Policy
 #elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpi
 
   #include "flecsi/execution/mpi/execution_policy.h"
@@ -70,8 +56,8 @@
 
   using flecsi_execution_policy_t = mpi_execution_policy_t;
 
-  }
-  }
+  } // namespace execution
+  } // namespace flecsi
 
 #endif // FLECSI_RUNTIME_MODEL
 

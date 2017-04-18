@@ -47,8 +47,7 @@ endif()
 # Find Legion
 #------------------------------------------------------------------------------#
 
-if(FLECSI_RUNTIME_MODEL STREQUAL "legion" OR
-  FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
+if(FLECSI_RUNTIME_MODEL STREQUAL "legion")
 
   find_package(Legion REQUIRED)
 
@@ -72,6 +71,10 @@ if(FLECSI_RUNTIME_MODEL STREQUAL "serial")
 #
 elseif(FLECSI_RUNTIME_MODEL STREQUAL "legion")
 
+  if(NOT ENABLE_MPI)
+    message (FATAL_ERROR "MPI is required for the legion runtime model")
+  endif()
+ 
   set(_runtime_path ${PROJECT_SOURCE_DIR}/flecsi/execution/legion)
 
   if(NOT APPLE)
@@ -96,39 +99,13 @@ elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpi")
   endif()
 
 #
-# MPI+Legion interface
-#
-elseif(FLECSI_RUNTIME_MODEL STREQUAL "mpilegion")
-
-  if(NOT ENABLE_MPI)
-    message (FATAL_ERROR "MPI is required for the mpilegion runtime model")
-  endif()
- 
-  set(_runtime_path ${PROJECT_SOURCE_DIR}/flecsi/execution/mpilegion)
-
-  if(NOT APPLE)
-    set(FLECSI_RUNTIME_LIBRARIES  -ldl ${Legion_LIBRARIES} ${MPI_LIBRARIES})
-  else()
-    set(FLECSI_RUNTIME_LIBRARIES  ${Legion_LIBRARIES} ${MPI_LIBRARIES})
-  endif()
-
-  include_directories(${Legion_INCLUDE_DIRS})
-
-#
 # Default
 #
-else(FLECSI_RUNTIME_MODEL STREQUAL "serial")
+else()
 
   message(FATAL_ERROR "Unrecognized runtime selection")  
 
-endif(FLECSI_RUNTIME_MODEL STREQUAL "serial")
-
-#------------------------------------------------------------------------------#
-# Cereal
-#------------------------------------------------------------------------------#
-
-  find_package (Cereal REQUIRED)
-  include_directories(${Cereal_INCLUDE_DIRS})
+endif()
 
 #------------------------------------------------------------------------------#
 # Process id bits
@@ -245,7 +222,8 @@ endif(NOT APPLE)
 # configure header
 #------------------------------------------------------------------------------#
 
-configure_file(${PROJECT_SOURCE_DIR}/config/flecsi.h.in ${CMAKE_BINARY_DIR}/flecsi.h @ONLY)
+configure_file(${PROJECT_SOURCE_DIR}/config/flecsi.h.in
+  ${CMAKE_BINARY_DIR}/flecsi.h @ONLY)
 include_directories(${CMAKE_BINARY_DIR})
 install(FILES ${CMAKE_BINARY_DIR}/flecsi.h DESTINATION include)
 

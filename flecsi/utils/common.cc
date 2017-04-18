@@ -19,6 +19,7 @@
  */
 
 namespace flecsi {
+namespace utils {
 
 #ifdef __GNUG__
 std::string demangle(const char* name) {
@@ -39,6 +40,7 @@ std::string demangle(const char* name) {
 
 #endif
 
+} // namespace utils
 } // namespace flecsi
 
 /*~------------------------------------------------------------------------~--*

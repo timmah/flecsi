@@ -7,9 +7,8 @@
 #define flecsi_runtime_data_policy_h
 
 ///
-// \file flecsi_runtime_policy.h
-// \authors bergen
-// \date Initial file creation: Aug 01, 2016
+/// \file
+/// \date Initial file creation: Aug 01, 2016
 ///
 
 ///
@@ -22,7 +21,7 @@
 #include "flecsi.h"
 
 // Serial Policy
-//#if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_serial
+#if FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_serial
 
   #include "flecsi/data/default_user_meta_data.h"
   #include "flecsi/data/serial/storage_policy.h"
@@ -31,26 +30,37 @@
   namespace data {
 
   using flecsi_user_meta_data_policy_t = default_user_meta_data_t;
-  template<typename T>
 
-  using flecsi_storage_policy_t = serial_storage_policy_t<T>;
+  template<typename MD>
+  using flecsi_storage_policy_t = serial_storage_policy_t<MD>;
 
-  }
-  }
+  } // namespace data
+  } // namespace flecsi
 
-// Legion Policy
-//#elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_legion || \
-//      FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion
+// FIXME: Remove rf_mpilegion after refactor
+//Legion Policy
+#elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_legion
 
-//  #include "flecsi/data/default_user_meta_data.h"
-//  #include "flecsi/data/legion/storage_policy.h"
-//  #define flecsi_user_meta_data_policy_t default_user_meta_data_t
-//  #define flecsi_storage_policy_t legion_storage_policy_t
+  #include "flecsi/data/default_user_meta_data.h"
+  #include "flecsi/data/legion/storage_policy.h"
 
-// MPI+Legion Policy
-//#elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpi
-//  #error "This policy is not yet implemented!"
-//#endif // FLECSI_RUNTIME_MODEL
+  namespace flecsi {
+  namespace data {
+
+  using flecsi_user_meta_data_policy_t = default_user_meta_data_t;
+
+  template<typename MD>
+  using flecsi_storage_policy_t = legion_storage_policy_t<MD>;
+
+  } // namespace data
+  } // namespace flecsi
+
+// MPI Policy
+#elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpi
+
+  #error "This policy is not yet implemented!"
+
+#endif // FLECSI_RUNTIME_MODEL
 
 #endif // flecsi_runtime_data_policy_h
 

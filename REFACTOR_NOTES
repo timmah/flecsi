@@ -1,0 +1,3 @@
+
+	- Fix partitioning logic bug identified by Ollie
+	- Add reduction to collect entities-pre-partition in MPI section

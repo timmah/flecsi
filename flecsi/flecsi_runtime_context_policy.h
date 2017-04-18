@@ -7,16 +7,15 @@
 #define flecsi_runtime_context_policy_h
 
 ///
-// \file flecsi_runtime_policy.h
-// \authors bergen
-// \date Initial file creation: Aug 01, 2016
+/// \file
+/// \date Initial file creation: Aug 01, 2016
 ///
 
 ///
-// This section works with the build system to select the correct runtime
-// implemenation for the task model. If you add to the possible runtimes,
-// remember to edit config/packages.cmake to include a definition using
-// the same convention, e.g., -DFLECSI_RUNTIME_MODEL_new_runtime.
+/// This section works with the build system to select the correct runtime
+/// implemenation for the task model. If you add to the possible runtimes,
+/// remember to edit config/packages.cmake to include a definition using
+/// the same convention, e.g., -DFLECSI_RUNTIME_MODEL_new_runtime.
 ///
 
 #include "flecsi.h"
@@ -43,18 +42,6 @@
   namespace execution {
 
   using flecsi_context_policy_t = legion_context_policy_t;
-
-  }
-  }
-
-// MPI+Legion Policy
-#elif FLECSI_RUNTIME_MODEL == FLECSI_RUNTIME_MODEL_mpilegion
-  #include "flecsi/execution/mpilegion/context_policy.h"
-
-  namespace flecsi {
-  namespace execution {
-
-  using flecsi_context_policy_t = mpilegion_context_policy_t;
 
   }
   }

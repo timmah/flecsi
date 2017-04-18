@@ -23,6 +23,7 @@
 #include <array>
 
 using flecsi::utils::any_t;
+using flecsi::dmp::index_partition_t;
 using std::cout;
 using std::endl;
 
@@ -30,6 +31,9 @@ using std::endl;
 //! \brief Test the "zip-like" iterator.
 //=============================================================================
 
+///
+/// some temporary class
+///
 class temp_class_t
 {
   int value;
@@ -42,13 +46,14 @@ public:
   }
 };
 
+///
+/// test body
+///
 TEST(any, simple) {
 
    typedef std::vector<any_t> storage_t;
    typedef storage_t::const_iterator storage_iter;
    storage_t storage;
-
-   using index_partition_t = flecsi::dmp::index_partition__<int>;
 
    double A;
    std::array<int,5> B;

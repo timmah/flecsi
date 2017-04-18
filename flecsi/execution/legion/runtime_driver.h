@@ -9,18 +9,34 @@
 #include <legion.h>
 
 ///
-// \file legion/runtime_driver.h
-// \authors bergen
-// \date Initial file creation: Jul 26, 2016
+/// \file
+/// \date Initial file creation: Jul 26, 2016
 ///
 
 namespace flecsi {
 namespace execution {
 
-void legion_runtime_driver(const LegionRuntime::HighLevel::Task * task,
+/// \brief The main driver function to be defined by the user.
+/// \param[in] argc  The number of arguments in argv.
+/// \param[in] argv  The list arguments passed to the driver.
+
+void driver(int argc, char ** argv);
+
+/// \brief The specialization driver function to be defined by the user.
+/// \param[in] argc  The number of arguments in argv.
+/// \param[in] argv  The list arguments passed to the driver.
+
+#if defined FLECSI_ENABLE_SPECIALIZATION_DRIVER
+void specialization_driver(int argc, char ** argv);
+#endif // FLECSI_ENABLE_SPECIALIZATION_DRIVER
+
+/// FleCSI runtime driver.
+void runtime_driver(const LegionRuntime::HighLevel::Task * task,
   const std::vector<LegionRuntime::HighLevel::PhysicalRegion> & regions,
   LegionRuntime::HighLevel::Context ctx,
   LegionRuntime::HighLevel::HighLevelRuntime * runtime);
+
+// The runtime_driver task will be registered in context initialize.
 
 } // namespace execution 
 } // namespace flecsi
