@@ -235,6 +235,9 @@ specialization_driver(
   //partition cells by number of mpi ranks
 
   Coloring cells_primary_coloring;
+  for(size_t i = 0; i < num_ranks-1; ++i)
+    cells_primary_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+
   {
     IndexIterator itr(runtime, context, cells_is);
 
@@ -265,6 +268,9 @@ specialization_driver(
 	//partition vertices by number of mpi ranks
 
   Coloring vert_primary_coloring;
+  for(size_t i = 0; i < num_ranks-1; ++i)
+    vert_primary_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+
   {
     IndexIterator itr(runtime, context, vertices_is);
 
@@ -331,6 +337,11 @@ specialization_driver(
   //creating partitioning for shared and exclusive elements:
   Coloring cells_shared_coloring;
   Coloring vert_shared_coloring;
+
+  for(size_t i = 0; i < num_ranks-1; ++i) {
+    cells_shared_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+    vert_shared_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+  }
 
   LegionRuntime::HighLevel::IndexLauncher shared_part_launcher(
     task_ids_t::instance().shared_part_task_id,
@@ -429,6 +440,11 @@ specialization_driver(
   //creating partitioning for exclusive elements in cells_is
   Coloring cells_exclusive_coloring;
   Coloring vert_exclusive_coloring;
+
+  for(size_t i = 0; i < num_ranks-1; ++i) {
+    cells_exclusive_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+    vert_exclusive_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+  }
 
   LegionRuntime::HighLevel::IndexLauncher exclusive_part_launcher(
     task_ids_t::instance().exclusive_part_task_id,
@@ -529,6 +545,11 @@ specialization_driver(
 
   Coloring cells_ghost_coloring;
   Coloring vert_ghost_coloring;
+
+  for(size_t i = 0; i < num_ranks-1; ++i) {
+    cells_ghost_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+    vert_ghost_coloring[i].points = std::set<ptr_t>(); // Legion runtime requires at least an empty set
+  }
 
   LegionRuntime::HighLevel::IndexLauncher ghost_part_launcher(
     task_ids_t::instance().ghost_part_task_id,
