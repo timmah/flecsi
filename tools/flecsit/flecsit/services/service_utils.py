@@ -83,7 +83,7 @@ def add_command_line_compiler_options(parser):
     )
     
     self.parser.add_argument('driver', nargs='*', action='append',
-    help='The files to anaylze.'
+        help='The user driver.'
     )
 
 # add_compiler_options
