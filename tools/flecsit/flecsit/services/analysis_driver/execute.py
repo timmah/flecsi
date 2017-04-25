@@ -16,6 +16,26 @@ def sym_exists(source,link_name):
     if not os.path.exists(link_name):
         os.symlink(source,link_name)
         
+def get_lib_name(lib):
+    left = 0
+    if(lib.rfind('/') != -1):
+        left = lib.rfind('/')
+    elif(lib.rfind('-l') != -1):
+        left = lib.find('-l')+1
+        
+    right = len(lib)
+    if(lib.find('.so') != -1):
+        right = lib.find('.so')
+        
+    print len(lib), left, right
+        
+    return (lib[(left+1):(right)]).replace('lib','')
+    
+def get_lib_path(lib):
+    if(lib.find('/') != -1):
+        return lib[0:lib.rfind('/')]
+    return ''
+        
 def execute(verbose, project_name, build):
 
     """
@@ -51,7 +71,10 @@ def execute(verbose, project_name, build):
     for tmp in mangled_list:
         if(tmp.find('-L')):
             cmake_lib_dirs += tmp.strip('-L') + ' '
-            
+    
+    for tmp in mangled_list:
+        res = get_lib_name(tmp)
+        print tmp, res, get_lib_path(tmp)
     
     cmake_include_dirs = build['includes'].replace('-I', '')
     
