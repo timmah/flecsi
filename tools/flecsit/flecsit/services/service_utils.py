@@ -81,9 +81,10 @@ def add_command_line_compiler_options(parser):
              ' it will override any libraries passed as' +
              ' command line arguements.'
     )
-    
+
     parser.add_argument('driver', nargs='*', action='append',
     help='The files to anaylze.'
+
     )
 
 # add_compiler_options
