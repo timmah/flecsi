@@ -292,6 +292,7 @@ spmd_task(
     PhaseBarrier* masters_pbarriers_buf = (PhaseBarrier*)malloc(sizeof(PhaseBarrier) * num_masters[idx]);
     args_deserializer.deserialize((void*)masters_pbarriers_buf, sizeof(PhaseBarrier) * num_masters[idx]);
     std::vector<PhaseBarrier> masters_pbarriers;
+
     for (size_t master = 0; master < num_masters[idx]; master++)
       fix_handles[idx].masters_pbarriers_ptrs.push_back(&(masters_pbarriers_buf[master]));
     assert(fix_handles[idx].masters_pbarriers_ptrs.size() == num_masters[idx]);
@@ -340,6 +341,7 @@ spmd_task(
   argv = (char**)std::malloc(sizeof(char*)*argc);
   std::memcpy(argv, args.argv, args.argc*sizeof(char*));
   argv[argc - 1] = (char*)&dc;
+
 
   driver(argc, argv);
 

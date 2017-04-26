@@ -576,6 +576,7 @@ struct storage_type_t<dense, DS, MD>
     // Store the data type size information.
     //------------------------------------------------------------------------//
 
+    std::cout << "580 SIZE " << sizeof(T)  << " in " << &data_store[NS][h] << std::endl;
     size_t type_size = sizeof(T);
 
     data_store[NS][h].type_size = type_size;
@@ -1010,12 +1011,17 @@ struct storage_type_t<dense, DS, MD>
     h.pregions_neighbors_shared = data.pregions_neighbors_shared;
     h.lregion_ghost = data.lregion_ghost;
     h.ghost_copy_task_id = data.ghost_copy_task_id;
+    std::cout << Legion::Runtime::get_runtime()->find_local_MPI_rank() <<
+        " 1032 GHOST COPY TASK ID " << h.ghost_copy_task_id <<
+        " " << md.type_size << " != " << sizeof(size_t)  <<
+        " from " << &md << std::endl;
     h.ghost_fid = data.ghost_fid;
     h.is_readable = data.is_readable;
 
-    if (md.type_size == sizeof(size_t))
+    if (md.type_size == sizeof(size_t)) {
       h.ghost_copy_task_id = flecsi::execution::task_ids_t::instance().size_t_copy_task_id;
-
+      std::cout << "1039 RESET TASK ID " << h.ghost_copy_task_id << std::endl;
+    }
     return h;
   } // get_handle
 
@@ -1042,9 +1048,10 @@ struct storage_type_t<dense, DS, MD>
           h.exclusive_ip = ld.exclusive_ip;
           h.shared_ip = ld.shared_ip;
           h.ghost_ip = ld.ghost_ip;
-          if (md.type_size == sizeof(size_t))
+          if (md.type_size == sizeof(size_t)) {
             h.ghost_copy_task_id = flecsi::execution::task_ids_t::instance().size_t_copy_task_id;
-
+          std::cout << "1076 RESET TASK ID " << h.ghost_copy_task_id << std::endl;
+        }
           handles.emplace_back(std::move(h));
         }
       }
@@ -1080,6 +1087,7 @@ struct storage_type_t<dense, DS, MD>
       ld.pregions_neighbors_shared = hi.pregions_neighbors_shared;
       ld.lregion_ghost = hi.lregion_ghost;
       ld.ghost_copy_task_id = hi.ghost_copy_task_id;
+      std::cout << "1124 GHOST COPY TASK ID " << ld.ghost_copy_task_id << std::endl;
       ld.ghost_fid = hi.ghost_fid;
       ld.is_readable = hi.is_readable;
     }

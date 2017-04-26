@@ -151,6 +151,7 @@ struct legion_execution_policy_t
     As && ... user_task_args
   )
   {
+    std::cout << "LEGION EXECUTION" << std::endl;
     using namespace Legion;
 
     context_t & context_ = context_t::instance();
@@ -170,6 +171,7 @@ struct legion_execution_policy_t
 
       case single:
       {
+        std::cout << "execution_policy " << context_.task_id(key) << std::endl;
         TaskLauncher task_launcher(context_.task_id(key),
           TaskArgument(&task_args, sizeof(task_args_t)));
 
@@ -190,6 +192,7 @@ struct legion_execution_policy_t
           LegionRuntime::Arrays::Point<1>(5));
         Domain launch_domain = Domain::from_rect<1>(launch_bounds);
 
+        std::cout << "execute INDEX " << context_.task_id(key) << std::endl;
         LegionRuntime::HighLevel::ArgumentMap arg_map;
         LegionRuntime::HighLevel::IndexLauncher index_launcher(
           context_.task_id(key), launch_domain, TaskArgument(&task_args,

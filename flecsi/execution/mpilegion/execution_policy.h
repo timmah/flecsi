@@ -148,6 +148,7 @@ namespace execution {
             acquire_launcher.add_wait_barrier(*(h.masters_pbarriers_ptrs[master]));  // phase READ
             runtime->issue_acquire(ctx, acquire_launcher);
 
+            std::cout << "GHOST COPY " << h.ghost_copy_task_id << std::endl;
             TaskLauncher copy_launcher(h.ghost_copy_task_id, TaskArgument(nullptr, 0));
             copy_launcher.add_region_requirement(RegionRequirement(lregion_neighbor, READ_ONLY,
                 EXCLUSIVE, lregion_neighbor).add_field(fid_t.fid_value));
@@ -369,6 +370,7 @@ struct mpilegion_execution_policy_t
     As && ... user_task_args
   )
   {
+    std::cout << "MPILEGION EXECUTION" << std::endl;
     using namespace Legion;
 
     context_t & context_ = context_t::instance();
@@ -389,6 +391,7 @@ struct mpilegion_execution_policy_t
       // its arguments to every MPI thread
       LegionRuntime::HighLevel::ArgumentMap arg_map;
 
+      std::cout << "MPILEGION MPI " << context_.task_id(key) << std::endl;
       LegionRuntime::HighLevel::IndexLauncher index_launcher(
         context_.task_id(key),
 
@@ -439,6 +442,7 @@ struct mpilegion_execution_policy_t
 
           task_args_t task_args2(user_task_handle, user_task_args_tuple);
 
+          std::cout << "MPILEGION SINGLE " << context_.task_id(key) << std::endl;
           TaskLauncher task_launcher(context_.task_id(key),
             TaskArgument(&task_args2, sizeof(task_args_t)));
 
@@ -461,6 +465,7 @@ struct mpilegion_execution_policy_t
         case index:
         {
           LegionRuntime::HighLevel::ArgumentMap arg_map;
+          std::cout << "MPILEGION " << context_.task_id(key) << std::endl;
           LegionRuntime::HighLevel::IndexLauncher index_launcher(
             context_.task_id(key),
             LegionRuntime::HighLevel::Domain::from_rect<1>(
